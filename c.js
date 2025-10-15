@@ -142,7 +142,14 @@ const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', '
 const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const dayFocusIn = (e) => e.target.style.boxShadow = '0px 0px 0px 2px lightblue';
 const dayFocusOut = (e) => e.target.style.boxShadow = '';
-const getDayView = (day) => {
+const getDayView = (month, day) => {
+    const wrapper = document.createElement('div');
+    const text = day.toISOString().split('T')[0];
+    const topDiv = document.createElement('div');
+    topDiv.style.fontSize = '1.5em';
+    topDiv.textContent = text;
+    wrapper.append(topDiv);
+    return wrapper;
 };
 const getMonthView = (month) => {
     const wrapper = document.createElement('div');
@@ -176,6 +183,7 @@ const getMonthView = (month) => {
         dayButton.onclick = () => console.log(day);
         dayButton.addEventListener('focusin', dayFocusIn);
         dayButton.addEventListener('focusout', dayFocusOut);
+        dayButton.addEventListener('dblclick', () => setDayView(month, day));
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
         if (isToday) {
             dayButton.style.backgroundColor = 'lightblue';
@@ -193,6 +201,10 @@ const getMonthView = (month) => {
 const setMonthView = (year, month) => {
     currentView = 'month';
     calendar.replaceChildren(getMonthView(CONTROLLER.getMonth(year, month)));
+};
+const setDayView = (month, day) => {
+    currentView = 'day';
+    calendar.replaceChildren(getDayView(month, day));
 };
 setMonthView(todayYear, todayMonth);
 section.replaceChildren(buttonDiv, calendar);

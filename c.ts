@@ -77,12 +77,13 @@ const CONTROLLER = (() => {
         const isMonthSame = end.getMonth() === start.getMonth();
         const isDaySame = end.getDate() === start.getDate();
         return (isYearSame && isMonthSame && isDaySame);
-    } 
+    }
     const getDatesBetweenStartAndEnd = (start: Date, end: Date): Date[] => {
         if (Number(end) > Number(start)) throw new Error('End time is before start time?');
         if (isSameDay(start, end)) return [];
         const dates: Date[] = [];
         let d = end;
+        // Just walk backward one day and push until you get the start day
         while (true) {
             d.setDate(d.getDate() - 1);
             if (d.getFullYear() < STARTYEAR) break;
@@ -94,7 +95,9 @@ const CONTROLLER = (() => {
 
     // Start/end
     const addEvent = (event: ScheduledEvent) => {
-        // Find all dates that are affected based on time span
+        // Find all dates that are affected based on time span,
+        // then add them to the map. That way we can look them up individually
+        // e.g. Day X has no start/end events but has 3 events running through it
         const timeSpan = () => {
 
         };
@@ -197,8 +200,16 @@ const dayFocusIn = (e: FocusEvent) => (e.target as HTMLButtonElement).style.boxS
 const dayFocusOut = (e: FocusEvent) => (e.target as HTMLButtonElement).style.boxShadow = '';
 
 
-const getDayView = (day: Date) => {
+const getDayView = (month: Date[], day: Date) => {
+    // Let's pass in the month so we can easily get back?
+    const wrapper = document.createElement('div');
+    const text = day.toISOString().split('T')[0];
+    const topDiv = document.createElement('div');
+    topDiv.style.fontSize = '1.5em';
+    topDiv.textContent = text;
 
+    wrapper.append(topDiv);
+    return wrapper;
 
 };
 
@@ -242,6 +253,7 @@ const getMonthView = (month: Date[]) => {
         dayButton.onclick = () => console.log(day);
         dayButton.addEventListener('focusin', dayFocusIn)
         dayButton.addEventListener('focusout', dayFocusOut);
+        dayButton.addEventListener('dblclick', () => setDayView(month, day));
 
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
 
@@ -258,6 +270,7 @@ const getMonthView = (month: Date[]) => {
 
     monthGrid.append(...dayButtons);
     wrapper.append(topDiv, monthGrid);
+    // Maybe want to return an object containing the element and days
     return wrapper;
 };
 
@@ -265,6 +278,12 @@ const setMonthView = (year: Year, month: Month) => {
     currentView = 'month';
     calendar.replaceChildren(getMonthView(CONTROLLER.getMonth(year, month)));
 }
+const setDayView = (month: Date[], day: Date) => {
+    // This is a little weird because we are not using the controller here.
+    // Should the controller track day?
+    currentView = 'day';
+    calendar.replaceChildren(getDayView(month, day));
+};
 
 // Init
 setMonthView(todayYear, todayMonth);
