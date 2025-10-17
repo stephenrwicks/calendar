@@ -17,26 +17,29 @@ type ScheduledEvent = {
     description: string;
 }
 
-const currentTime = new Date();
-const todayYear = currentTime.getFullYear() as Year;
-const todayMonth = (currentTime.getMonth() + 1) as Month;
-const todayDay = currentTime.getDate();
+// It would have been fun to use the new Temporal API for this project but it's not widely available yet ~October 2025
+
+let LIVETIME: Date;
+const initTime = new Date();
+const todayYear = initTime.getFullYear() as Year;
+const todayMonth = (initTime.getMonth() + 1) as Month;
+const todayDay = initTime.getDate();
 let currentView: 'month' | 'day' = 'month';
 
 const CONTROLLER = (() => {
     const STARTYEAR = 2000;
     const ENDYEAR = 2050;
 
-
     // Initializes where to start on the calendar
     let _currentYear = todayYear;
     let _currentMonth = todayMonth;
+    let _currentDay = todayDay;
 
-    const dateObject: Partial<CalendarObject> = {};
+    const CALENDAROBJECT: Partial<CalendarObject> = {};
     let d = new Date(STARTYEAR, 0, 1);
     while (d.getFullYear() <= ENDYEAR) {
         const year = d.getFullYear() as Year;
-        dateObject[year] ??= {
+        CALENDAROBJECT[year] ??= {
             1: [],
             2: [],
             3: [],
@@ -51,22 +54,22 @@ const CONTROLLER = (() => {
             12: [],
         };
         const month = d.getMonth() + 1 as Month;
-        const x = dateObject[year];
+        const x = CALENDAROBJECT[year];
         if (x) x[month].push(new Date(d))
         d.setDate(d.getDate() + 1);
     }
 
-
-    // This should return events for each day
+    // Month is 1 indexed
     const getMonth = (year: Year, month: Month) => {
-        const x = dateObject[year];
+        const x = CALENDAROBJECT[year];
         if (x) return x[month];
         throw new Error('Invalid year/month');
     };
 
     const getDay = (year: Year, month: Month, day: number) => {
         const m = getMonth(year, month);
-        // Subtract one to offset 0-index so we can actually look up by day
+        // Subtract one to offset 0-index so we can actually look up by day 
+        // (day 1 gets position 0 in array)
         const d = m[day - 1];
         if (!d) throw new Error('Invalid day');
         return d;
@@ -118,32 +121,60 @@ const CONTROLLER = (() => {
     // if I'm in a "timespan" day, how do I get events related to it? That means every timespanned day must immediately get mapped.
     const eventMap: Map<Date, ScheduledEvent> = new Map();
 
-
-
-
-    const goToMonth = (year: Year, month: Month) => {
-        if (year > ENDYEAR) throw new Error();
-        if (month < 1 || month > 12) throw new Error();
-        _currentYear = year;
-        _currentMonth = month;
-        return { year: _currentYear, month: _currentMonth };
+    const getCurrentDate = (): Date => {
+        return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
     };
 
-    // CURRENT object with the getters is probably overcomplicated. We can just return a new object
+    const setCurrentDate = (date: Date) => {
+        const year = date.getFullYear() as Year;
+        const month = (date.getMonth() + 1) as Month;
+        if (year > ENDYEAR || year < STARTYEAR) throw new Error();
+        _currentYear = year;
+        _currentMonth = month;
+        _currentDay = date.getDate();
+        return getCurrentDate();
+    };
+
+    const setCurrentMonth = (year: Year, month: Month) => {
+        if (year > ENDYEAR || year < STARTYEAR) throw new Error();
+        if (month < 1 || month > 12) throw new Error();
+        // Set current day to day 1
+        _currentYear = year;
+        _currentMonth = month;
+        _currentDay = 1;
+        return { year: _currentYear, month: _currentMonth, day: _currentDay };
+    };
+
     const goToNextMonth = () => {
-        if (_currentMonth >= 12) return goToMonth((_currentYear + 1 as Year), 1);
-        return goToMonth(_currentYear, (_currentMonth + 1 as Month));
+        if (_currentMonth >= 12) return setCurrentMonth((_currentYear + 1 as Year), 1);
+        return setCurrentMonth(_currentYear, (_currentMonth + 1 as Month));
     };
 
     const goToPrevMonth = () => {
-        if (_currentMonth <= 1) return goToMonth((_currentYear - 1 as Year), 12);
-        return goToMonth(_currentYear, (_currentMonth - 1 as Month));
+        if (_currentMonth <= 1) return setCurrentMonth((_currentYear - 1 as Year), 12);
+        return setCurrentMonth(_currentYear, (_currentMonth - 1 as Month));
+    };
+
+    const goToNextDay = () => {
+        const current = getCurrentDate();
+        current.setDate(current.getDate() + 1);
+        return new Date(current);
+    };
+
+    const goToPrevDay = () => {
+        const current = getCurrentDate();
+        current.setDate(current.getDate() - 1);
+        return new Date(current);
     };
 
     return {
+        setCurrentDate,
+        getCurrentDate,
         getMonth,
         goToNextMonth,
-        goToPrevMonth
+        goToPrevMonth,
+        goToNextDay,
+        goToPrevDay,
     };
 
 })();
@@ -170,15 +201,18 @@ main.style.flexDirection = 'column';
 main.style.alignItems = 'center';
 main.style.paddingBottom = '5rem';
 
-const buttonDiv = document.createElement('div');
-buttonDiv.style.display = 'flex';
-buttonDiv.style.gap = '1rem';
-buttonDiv.style.justifyContent = 'end';
+// These don't need to be recreated
+const monthNavigationButtonDiv = document.createElement('div');
+monthNavigationButtonDiv.style.display = 'flex';
+monthNavigationButtonDiv.style.gap = '1rem';
 const nextButton = document.createElement('button');
 const prevButton = document.createElement('button');
+nextButton.style.width = '2.5rem';
+prevButton.style.width = '2.5rem';
 nextButton.textContent = '>';
 prevButton.textContent = '<';
-buttonDiv.replaceChildren(prevButton, nextButton);
+monthNavigationButtonDiv.replaceChildren(prevButton, nextButton);
+
 nextButton.addEventListener('click', () => {
     const { year, month } = CONTROLLER.goToNextMonth();
     setMonthView(year, month);
@@ -187,28 +221,143 @@ prevButton.addEventListener('click', () => {
     const { year, month } = CONTROLLER.goToPrevMonth();
     setMonthView(year, month);
 });
+const dayNavigationButtonDiv = document.createElement('div');
+dayNavigationButtonDiv.style.display = 'flex';
+dayNavigationButtonDiv.style.gap = '1rem';
+const nextDayButton = document.createElement('button');
+const prevDayButton = document.createElement('button');
+nextDayButton.style.width = '2.5rem';
+prevDayButton.style.width = '2.5rem';
+nextDayButton.textContent = '>';
+prevDayButton.textContent = '<';
+dayNavigationButtonDiv.replaceChildren(prevDayButton, nextDayButton);
 
-const calendar = document.createElement('div');
+nextDayButton.addEventListener('click', () => {
+    // This always goes to "tomorrow" because current day is not set to day view
+    const date = CONTROLLER.goToNextDay();
+    //const date = CONTROLLER.getCurrentDate();
+    //const monthArray = CONTROLLER.getMonth((date.getFullYear() as Year), (date.getMonth() + 1 as Month))
+    setDayView(date);
+});
+prevDayButton.addEventListener('click', () => {
+    const date = CONTROLLER.goToPrevDay();
+    //const date = CONTROLLER.getCurrentDate();
+    //const monthArray = CONTROLLER.getMonth((date.getFullYear() as Year), (date.getMonth() + 1 as Month))
+    setDayView(date);
+});
+
+const addEventButton = document.createElement('button');
+addEventButton.textContent = 'Add Event';
+addEventButton.addEventListener('click', async () => {
+    await new Promise(resolve => {
+        const dialog = document.createElement('dialog');
+        pageWrapper.append(dialog);
+        dialog.style.width = '600px';
+        dialog.style.height = '600px';
+        dialog.textContent = 'Add event';
+        dialog.showModal();
+
+    });
+});
+
+const calendar = document.createElement('section');
 
 const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '0px 0px 0px 2px inset darkblue';
+const handleDayFocusOut = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '';
+const handleDayMouseIn = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = '#fafafa';
+const handleDayMouseOut = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'unset'; // isToday breaks
 
-//const handle
 
-const dayFocusIn = (e: FocusEvent) => (e.target as HTMLButtonElement).style.boxShadow = '0px 0px 0px 2px lightblue';
-const dayFocusOut = (e: FocusEvent) => (e.target as HTMLButtonElement).style.boxShadow = '';
+const handleDayKeydown = (e: KeyboardEvent, i: number, day: Date, dayButtons: HTMLButtonElement[]) => {
+    e.preventDefault();
+    if (e.key === 'Enter') {
+        setDayView(day);
+        return;
+    }
 
+    // This is verbose but probably the clearest way to write this
+    if (e.key === 'ArrowRight') {
+        if (dayButtons[i + 1] instanceof HTMLButtonElement) {
+            dayButtons[i + 1].focus();
+            return;
+        }
+        const { year, month } = CONTROLLER.goToNextMonth();
+        setMonthView(year, month, 0);
+    }
+    else if (e.key === 'ArrowLeft') {
+        if (dayButtons[i - 1] instanceof HTMLButtonElement) {
+            dayButtons[i - 1].focus();
+            return;
+        }
+        const { year, month } = CONTROLLER.goToPrevMonth();
+        setMonthView(year, month, -1);
+    }
+    else if (e.key === 'ArrowDown') {
+        if (dayButtons[i + 7] instanceof HTMLButtonElement) {
+            dayButtons[i + 7].focus();
+            return;
+        }
+        const offset = dayButtons.length - i;
+        const focusIndex = 7 - offset;
+        const { year, month } = CONTROLLER.goToNextMonth();
+        setMonthView(year, month, focusIndex);
+    }
+    else if (e.key === 'ArrowUp') {
+        if (dayButtons[i - 7] instanceof HTMLButtonElement) {
+            dayButtons[i - 7].focus();
+            return;
+        }
+        const focusIndex = (7 - i) * -1;
+        const { year, month } = CONTROLLER.goToPrevMonth();
+        setMonthView(year, month, focusIndex);
+    }
+};
 
-const getDayView = (month: Date[], day: Date) => {
+const getDayView = (day: Date) => {
     // Let's pass in the month so we can easily get back?
+    // You probably don't need month here if we have controller handling that (and it's cleaner that way)
     const wrapper = document.createElement('div');
-    const text = day.toISOString().split('T')[0];
+    wrapper.style.width = '700px';
+
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
-    topDiv.textContent = text;
+    topDiv.style.display = 'flex';
+    topDiv.style.justifyContent = 'space-between';
+    topDiv.style.marginBottom = '2rem';
 
-    wrapper.append(topDiv);
+    const dateHeader = document.createElement('div');
+    dateHeader.textContent = day.toISOString().split('T')[0];
+
+    const dayGrid = document.createElement('div');
+    dayGrid.style.display = 'grid';
+    dayGrid.style.gridTemplateColumns = 'repeat(24, 1fr)';
+
+    dayGrid.append(...Array.from({ length: 24 }, (_, i) => {
+        const hourDiv = document.createElement('div');
+        if (i % 4 !== 0) return hourDiv;
+        hourDiv.textContent = `${i}:00`;
+        hourDiv.style.textAlign = 'center';
+        hourDiv.style.fontSize = '.8em';
+        return hourDiv;
+    }));
+
+    const eventDivs = Array.from({ length: 10 }, () => {
+        const div = document.createElement('div');
+        // This isn't quite good because the hour borders can't go down. Unless we don't care
+        div.style.gridColumn = 'span 24';
+        div.style.height = '40px';
+        return div;
+    })
+
+    dayGrid.append(...eventDivs);
+
+
+
+    topDiv.append(dateHeader, addEventButton, dayNavigationButtonDiv);
+    wrapper.append(topDiv, dayGrid);
     return wrapper;
 
 };
@@ -217,16 +366,23 @@ const getDayView = (month: Date[], day: Date) => {
 const getMonthView = (month: Date[]) => {
 
     const wrapper = document.createElement('div');
+    wrapper.style.width = '700px';
+
     const y = month[0].getFullYear();
     const m = month[0].getMonth();
 
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
-    topDiv.textContent = `${monthsOfTheYear[m]} ${y}`;
+    topDiv.style.display = 'flex';
+    topDiv.style.justifyContent = 'space-between';
+    topDiv.style.marginBottom = '2rem';
+
+    const dateHeader = document.createElement('div');
+    dateHeader.textContent = `${monthsOfTheYear[m]} ${y}`;
 
     const monthGrid = document.createElement('div');
     monthGrid.style.boxSizing = 'border-box';
-    monthGrid.style.width = '700px';
+
     monthGrid.style.display = 'grid';
     monthGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
     monthGrid.style.gap = '1px';
@@ -239,21 +395,22 @@ const getMonthView = (month: Date[]) => {
         return dayOfTheWeekNameDiv;
     }));
 
-    // Local arrays of buttons may make keyboard control very tricky
     const dayButtons = month.map((day, i) => {
         const dayButton = document.createElement('button');
         dayButton.type = 'button';
-        //dayButton.tabIndex = 0;
         dayButton.style.backgroundColor = 'unset';
         dayButton.style.outline = 'unset';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
         dayButton.style.padding = '8px';
         dayButton.style.outline = '1px solid #ccc';
-        dayButton.onclick = () => console.log(day);
-        dayButton.addEventListener('focusin', dayFocusIn)
-        dayButton.addEventListener('focusout', dayFocusOut);
-        dayButton.addEventListener('dblclick', () => setDayView(month, day));
+        //dayButton.onclick = () => console.log(day);
+        dayButton.addEventListener('focusin', handleDayFocusIn)
+        dayButton.addEventListener('focusout', handleDayFocusOut);
+        dayButton.addEventListener('pointerenter', handleDayMouseIn);
+        dayButton.addEventListener('pointerleave', handleDayMouseOut);
+        dayButton.addEventListener('dblclick', () => setDayView(day));
+        dayButton.addEventListener('keydown', (e) => handleDayKeydown(e, i, day, dayButtons));
 
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
 
@@ -268,34 +425,44 @@ const getMonthView = (month: Date[]) => {
         return dayButton;
     });
 
+    topDiv.append(dateHeader, monthNavigationButtonDiv);
     monthGrid.append(...dayButtons);
     wrapper.append(topDiv, monthGrid);
     // Maybe want to return an object containing the element and days
-    return wrapper;
+    return {
+        element: wrapper,
+        dayButtons
+    };
 };
 
-const setMonthView = (year: Year, month: Month) => {
+const setMonthView = (year: Year, month: Month, focusIndex?: number) => {
     currentView = 'month';
-    calendar.replaceChildren(getMonthView(CONTROLLER.getMonth(year, month)));
+    const { element, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
+    calendar.replaceChildren(element);
+    if (typeof focusIndex === 'number') {
+        // array.prototype.at() is widely available at this point. Why are we not using negative indices always?
+        // Here I can work from the end if I need to easily.
+        dayButtons.at(focusIndex)?.focus();
+    }
 }
-const setDayView = (month: Date[], day: Date) => {
-    // This is a little weird because we are not using the controller here.
-    // Should the controller track day?
+const setDayView = (day: Date) => {
     currentView = 'day';
-    calendar.replaceChildren(getDayView(month, day));
+    CONTROLLER.setCurrentDate(day);
+    calendar.replaceChildren(getDayView(day));
 };
 
 // Init
 setMonthView(todayYear, todayMonth);
 
-section.replaceChildren(buttonDiv, calendar);
-main.replaceChildren(section);
+main.replaceChildren(calendar);
 pageWrapper.replaceChildren(header, main);
 body.replaceChildren(pageWrapper);
 
 (async () => {
     while (true) {
-        const dateTime = `${new Date().toLocaleString()}`;
+        // This should update some "live date" marker on the calendar every second
+        LIVETIME = new Date();
+        const dateTime = `${LIVETIME.toLocaleString()}`;
         title.textContent = dateTime;
         h1.textContent = dateTime; // This is super basic but we can run it through a function to look cool
         await new Promise(r => setTimeout(r, 1000));

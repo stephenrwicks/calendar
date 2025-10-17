@@ -1,19 +1,21 @@
 "use strict";
-const currentTime = new Date();
-const todayYear = currentTime.getFullYear();
-const todayMonth = (currentTime.getMonth() + 1);
-const todayDay = currentTime.getDate();
+let LIVETIME;
+const initTime = new Date();
+const todayYear = initTime.getFullYear();
+const todayMonth = (initTime.getMonth() + 1);
+const todayDay = initTime.getDate();
 let currentView = 'month';
 const CONTROLLER = (() => {
     const STARTYEAR = 2000;
     const ENDYEAR = 2050;
     let _currentYear = todayYear;
     let _currentMonth = todayMonth;
-    const dateObject = {};
+    let _currentDay = todayDay;
+    const CALENDAROBJECT = {};
     let d = new Date(STARTYEAR, 0, 1);
     while (d.getFullYear() <= ENDYEAR) {
         const year = d.getFullYear();
-        dateObject[year] ??= {
+        CALENDAROBJECT[year] ??= {
             1: [],
             2: [],
             3: [],
@@ -28,13 +30,13 @@ const CONTROLLER = (() => {
             12: [],
         };
         const month = d.getMonth() + 1;
-        const x = dateObject[year];
+        const x = CALENDAROBJECT[year];
         if (x)
             x[month].push(new Date(d));
         d.setDate(d.getDate() + 1);
     }
     const getMonth = (year, month) => {
-        const x = dateObject[year];
+        const x = CALENDAROBJECT[year];
         if (x)
             return x[month];
         throw new Error('Invalid year/month');
@@ -79,29 +81,57 @@ const CONTROLLER = (() => {
     const getEventsByDay = () => {
     };
     const eventMap = new Map();
-    const goToMonth = (year, month) => {
-        if (year > ENDYEAR)
+    const getCurrentDate = () => {
+        return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
+    };
+    const setCurrentDate = (date) => {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1);
+        if (year > ENDYEAR || year < STARTYEAR)
+            throw new Error();
+        _currentYear = year;
+        _currentMonth = month;
+        _currentDay = date.getDate();
+        return getCurrentDate();
+    };
+    const setCurrentMonth = (year, month) => {
+        if (year > ENDYEAR || year < STARTYEAR)
             throw new Error();
         if (month < 1 || month > 12)
             throw new Error();
         _currentYear = year;
         _currentMonth = month;
-        return { year: _currentYear, month: _currentMonth };
+        _currentDay = 1;
+        return { year: _currentYear, month: _currentMonth, day: _currentDay };
     };
     const goToNextMonth = () => {
         if (_currentMonth >= 12)
-            return goToMonth(_currentYear + 1, 1);
-        return goToMonth(_currentYear, _currentMonth + 1);
+            return setCurrentMonth(_currentYear + 1, 1);
+        return setCurrentMonth(_currentYear, _currentMonth + 1);
     };
     const goToPrevMonth = () => {
         if (_currentMonth <= 1)
-            return goToMonth(_currentYear - 1, 12);
-        return goToMonth(_currentYear, _currentMonth - 1);
+            return setCurrentMonth(_currentYear - 1, 12);
+        return setCurrentMonth(_currentYear, _currentMonth - 1);
+    };
+    const goToNextDay = () => {
+        const current = getCurrentDate();
+        current.setDate(current.getDate() + 1);
+        return new Date(current);
+    };
+    const goToPrevDay = () => {
+        const current = getCurrentDate();
+        current.setDate(current.getDate() - 1);
+        return new Date(current);
     };
     return {
+        setCurrentDate,
+        getCurrentDate,
         getMonth,
         goToNextMonth,
-        goToPrevMonth
+        goToPrevMonth,
+        goToNextDay,
+        goToPrevDay,
     };
 })();
 const body = document.body;
@@ -120,15 +150,16 @@ main.style.display = 'flex';
 main.style.flexDirection = 'column';
 main.style.alignItems = 'center';
 main.style.paddingBottom = '5rem';
-const buttonDiv = document.createElement('div');
-buttonDiv.style.display = 'flex';
-buttonDiv.style.gap = '1rem';
-buttonDiv.style.justifyContent = 'end';
+const monthNavigationButtonDiv = document.createElement('div');
+monthNavigationButtonDiv.style.display = 'flex';
+monthNavigationButtonDiv.style.gap = '1rem';
 const nextButton = document.createElement('button');
 const prevButton = document.createElement('button');
+nextButton.style.width = '2.5rem';
+prevButton.style.width = '2.5rem';
 nextButton.textContent = '>';
 prevButton.textContent = '<';
-buttonDiv.replaceChildren(prevButton, nextButton);
+monthNavigationButtonDiv.replaceChildren(prevButton, nextButton);
 nextButton.addEventListener('click', () => {
     const { year, month } = CONTROLLER.goToNextMonth();
     setMonthView(year, month);
@@ -137,30 +168,132 @@ prevButton.addEventListener('click', () => {
     const { year, month } = CONTROLLER.goToPrevMonth();
     setMonthView(year, month);
 });
-const calendar = document.createElement('div');
+const dayNavigationButtonDiv = document.createElement('div');
+dayNavigationButtonDiv.style.display = 'flex';
+dayNavigationButtonDiv.style.gap = '1rem';
+const nextDayButton = document.createElement('button');
+const prevDayButton = document.createElement('button');
+nextDayButton.style.width = '2.5rem';
+prevDayButton.style.width = '2.5rem';
+nextDayButton.textContent = '>';
+prevDayButton.textContent = '<';
+dayNavigationButtonDiv.replaceChildren(prevDayButton, nextDayButton);
+nextDayButton.addEventListener('click', () => {
+    const date = CONTROLLER.goToNextDay();
+    setDayView(date);
+});
+prevDayButton.addEventListener('click', () => {
+    const date = CONTROLLER.goToPrevDay();
+    setDayView(date);
+});
+const addEventButton = document.createElement('button');
+addEventButton.textContent = 'Add Event';
+addEventButton.addEventListener('click', async () => {
+    await new Promise(resolve => {
+        const dialog = document.createElement('dialog');
+        pageWrapper.append(dialog);
+        dialog.style.width = '600px';
+        dialog.style.height = '600px';
+        dialog.textContent = 'Add event';
+        dialog.showModal();
+    });
+});
+const calendar = document.createElement('section');
 const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const dayFocusIn = (e) => e.target.style.boxShadow = '0px 0px 0px 2px lightblue';
-const dayFocusOut = (e) => e.target.style.boxShadow = '';
-const getDayView = (month, day) => {
+const handleDayFocusIn = (e) => e.target.style.boxShadow = '0px 0px 0px 2px inset darkblue';
+const handleDayFocusOut = (e) => e.target.style.boxShadow = '';
+const handleDayMouseIn = (e) => e.target.style.backgroundColor = '#fafafa';
+const handleDayMouseOut = (e) => e.target.style.backgroundColor = 'unset';
+const handleDayKeydown = (e, i, day, dayButtons) => {
+    e.preventDefault();
+    if (e.key === 'Enter') {
+        setDayView(day);
+        return;
+    }
+    if (e.key === 'ArrowRight') {
+        if (dayButtons[i + 1] instanceof HTMLButtonElement) {
+            dayButtons[i + 1].focus();
+            return;
+        }
+        const { year, month } = CONTROLLER.goToNextMonth();
+        setMonthView(year, month, 0);
+    }
+    else if (e.key === 'ArrowLeft') {
+        if (dayButtons[i - 1] instanceof HTMLButtonElement) {
+            dayButtons[i - 1].focus();
+            return;
+        }
+        const { year, month } = CONTROLLER.goToPrevMonth();
+        setMonthView(year, month, -1);
+    }
+    else if (e.key === 'ArrowDown') {
+        if (dayButtons[i + 7] instanceof HTMLButtonElement) {
+            dayButtons[i + 7].focus();
+            return;
+        }
+        const offset = dayButtons.length - i;
+        const focusIndex = 7 - offset;
+        const { year, month } = CONTROLLER.goToNextMonth();
+        setMonthView(year, month, focusIndex);
+    }
+    else if (e.key === 'ArrowUp') {
+        if (dayButtons[i - 7] instanceof HTMLButtonElement) {
+            dayButtons[i - 7].focus();
+            return;
+        }
+        const focusIndex = (7 - i) * -1;
+        const { year, month } = CONTROLLER.goToPrevMonth();
+        setMonthView(year, month, focusIndex);
+    }
+};
+const getDayView = (day) => {
     const wrapper = document.createElement('div');
-    const text = day.toISOString().split('T')[0];
+    wrapper.style.width = '700px';
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
-    topDiv.textContent = text;
-    wrapper.append(topDiv);
+    topDiv.style.display = 'flex';
+    topDiv.style.justifyContent = 'space-between';
+    topDiv.style.marginBottom = '2rem';
+    const dateHeader = document.createElement('div');
+    dateHeader.textContent = day.toISOString().split('T')[0];
+    const dayGrid = document.createElement('div');
+    dayGrid.style.display = 'grid';
+    dayGrid.style.gridTemplateColumns = 'repeat(24, 1fr)';
+    dayGrid.append(...Array.from({ length: 24 }, (_, i) => {
+        const hourDiv = document.createElement('div');
+        if (i % 4 !== 0)
+            return hourDiv;
+        hourDiv.textContent = `${i}:00`;
+        hourDiv.style.textAlign = 'center';
+        hourDiv.style.fontSize = '.8em';
+        return hourDiv;
+    }));
+    const eventDivs = Array.from({ length: 10 }, () => {
+        const div = document.createElement('div');
+        div.style.gridColumn = 'span 24';
+        div.style.height = '40px';
+        return div;
+    });
+    dayGrid.append(...eventDivs);
+    topDiv.append(dateHeader, addEventButton, dayNavigationButtonDiv);
+    wrapper.append(topDiv, dayGrid);
     return wrapper;
 };
 const getMonthView = (month) => {
     const wrapper = document.createElement('div');
+    wrapper.style.width = '700px';
     const y = month[0].getFullYear();
     const m = month[0].getMonth();
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
-    topDiv.textContent = `${monthsOfTheYear[m]} ${y}`;
+    topDiv.style.display = 'flex';
+    topDiv.style.justifyContent = 'space-between';
+    topDiv.style.marginBottom = '2rem';
+    const dateHeader = document.createElement('div');
+    dateHeader.textContent = `${monthsOfTheYear[m]} ${y}`;
     const monthGrid = document.createElement('div');
     monthGrid.style.boxSizing = 'border-box';
-    monthGrid.style.width = '700px';
     monthGrid.style.display = 'grid';
     monthGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
     monthGrid.style.gap = '1px';
@@ -180,10 +313,12 @@ const getMonthView = (month) => {
         dayButton.style.borderRadius = '0px';
         dayButton.style.padding = '8px';
         dayButton.style.outline = '1px solid #ccc';
-        dayButton.onclick = () => console.log(day);
-        dayButton.addEventListener('focusin', dayFocusIn);
-        dayButton.addEventListener('focusout', dayFocusOut);
-        dayButton.addEventListener('dblclick', () => setDayView(month, day));
+        dayButton.addEventListener('focusin', handleDayFocusIn);
+        dayButton.addEventListener('focusout', handleDayFocusOut);
+        dayButton.addEventListener('pointerenter', handleDayMouseIn);
+        dayButton.addEventListener('pointerleave', handleDayMouseOut);
+        dayButton.addEventListener('dblclick', () => setDayView(day));
+        dayButton.addEventListener('keydown', (e) => handleDayKeydown(e, i, day, dayButtons));
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
         if (isToday) {
             dayButton.style.backgroundColor = 'lightblue';
@@ -194,26 +329,35 @@ const getMonthView = (month) => {
         dayButton.textContent = String(i + 1);
         return dayButton;
     });
+    topDiv.append(dateHeader, monthNavigationButtonDiv);
     monthGrid.append(...dayButtons);
     wrapper.append(topDiv, monthGrid);
-    return wrapper;
+    return {
+        element: wrapper,
+        dayButtons
+    };
 };
-const setMonthView = (year, month) => {
+const setMonthView = (year, month, focusIndex) => {
     currentView = 'month';
-    calendar.replaceChildren(getMonthView(CONTROLLER.getMonth(year, month)));
+    const { element, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
+    calendar.replaceChildren(element);
+    if (typeof focusIndex === 'number') {
+        dayButtons.at(focusIndex)?.focus();
+    }
 };
-const setDayView = (month, day) => {
+const setDayView = (day) => {
     currentView = 'day';
-    calendar.replaceChildren(getDayView(month, day));
+    CONTROLLER.setCurrentDate(day);
+    calendar.replaceChildren(getDayView(day));
 };
 setMonthView(todayYear, todayMonth);
-section.replaceChildren(buttonDiv, calendar);
-main.replaceChildren(section);
+main.replaceChildren(calendar);
 pageWrapper.replaceChildren(header, main);
 body.replaceChildren(pageWrapper);
 (async () => {
     while (true) {
-        const dateTime = `${new Date().toLocaleString()}`;
+        LIVETIME = new Date();
+        const dateTime = `${LIVETIME.toLocaleString()}`;
         title.textContent = dateTime;
         h1.textContent = dateTime;
         await new Promise(r => setTimeout(r, 1000));
