@@ -11,42 +11,15 @@ const CONTROLLER = (() => {
     let _currentYear = todayYear;
     let _currentMonth = todayMonth;
     let _currentDay = todayDay;
-    const CALENDAROBJECT = {};
-    let d = new Date(STARTYEAR, 0, 1);
-    while (d.getFullYear() <= ENDYEAR) {
-        const year = d.getFullYear();
-        CALENDAROBJECT[year] ??= {
-            1: [],
-            2: [],
-            3: [],
-            4: [],
-            5: [],
-            6: [],
-            7: [],
-            8: [],
-            9: [],
-            10: [],
-            11: [],
-            12: [],
-        };
-        const month = d.getMonth() + 1;
-        const x = CALENDAROBJECT[year];
-        if (x)
-            x[month].push(new Date(d));
-        d.setDate(d.getDate() + 1);
-    }
     const getMonth = (year, month) => {
-        const x = CALENDAROBJECT[year];
-        if (x)
-            return x[month];
-        throw new Error('Invalid year/month');
-    };
-    const getDay = (year, month, day) => {
-        const m = getMonth(year, month);
-        const d = m[day - 1];
-        if (!d)
-            throw new Error('Invalid day');
-        return d;
+        const days = [];
+        const m = month - 1;
+        const d = new Date(year, m, 1);
+        while (d.getMonth() === m) {
+            days.push(new Date(d));
+            d.setDate(d.getDate() + 1);
+        }
+        return days;
     };
     const isSameDay = (start, end) => {
         const isYearSame = end.getFullYear() === start.getFullYear();
@@ -54,33 +27,35 @@ const CONTROLLER = (() => {
         const isDaySame = end.getDate() === start.getDate();
         return (isYearSame && isMonthSame && isDaySame);
     };
-    const getDatesBetweenStartAndEnd = (start, end) => {
-        if (Number(end) > Number(start))
+    const getDatesFromStartToEnd = (start, end) => {
+        if (Number(end) < Number(start))
             throw new Error('End time is before start time?');
+        const dates = [end];
         if (isSameDay(start, end))
-            return [];
-        const dates = [];
-        let d = end;
+            return dates;
+        let d = new Date(end);
         while (true) {
             d.setDate(d.getDate() - 1);
             if (d.getFullYear() < STARTYEAR)
                 break;
+            dates.push(new Date(d));
             if (isSameDay(start, d))
                 break;
-            dates.push(new Date(d));
         }
         return dates;
     };
-    const addEvent = (event) => {
-        const timeSpan = () => {
-        };
-        eventMap.set(event.startTime, event);
+    const EVENTS = [];
+    EVENTS.push({
+        startTime: new Date(2025, 9, 2),
+        endTime: new Date(2025, 9, 13),
+        name: 'test',
+        description: 'description',
+    });
+    const getEventsForDay = (day) => {
+        return EVENTS.filter(event => {
+            return getDatesFromStartToEnd(event.startTime, event.endTime).some(date => isSameDay(date, day));
+        });
     };
-    const removeEvent = () => {
-    };
-    const getEventsByDay = () => {
-    };
-    const eventMap = new Map();
     const getCurrentDate = () => {
         return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
     };
@@ -132,6 +107,7 @@ const CONTROLLER = (() => {
         goToPrevMonth,
         goToNextDay,
         goToPrevDay,
+        getEventsForDay,
     };
 })();
 const body = document.body;
@@ -187,6 +163,7 @@ prevDayButton.addEventListener('click', () => {
     setDayView(date);
 });
 const addEventButton = document.createElement('button');
+addEventButton.type = 'button';
 addEventButton.textContent = 'Add Event';
 addEventButton.addEventListener('click', async () => {
     await new Promise(resolve => {
@@ -198,14 +175,23 @@ addEventButton.addEventListener('click', async () => {
         dialog.showModal();
     });
 });
+const goBackToMonthButton = document.createElement('button');
+goBackToMonthButton.type = 'button';
+goBackToMonthButton.textContent = 'Back';
+goBackToMonthButton.addEventListener('click', () => {
+    const date = CONTROLLER.getCurrentDate();
+    setMonthView(date.getFullYear(), (date.getMonth() + 1), date.getDate() - 1);
+});
 const calendar = document.createElement('section');
 const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const handleDayFocusIn = (e) => e.target.style.boxShadow = '0px 0px 0px 2px inset darkblue';
 const handleDayFocusOut = (e) => e.target.style.boxShadow = '';
 const handleDayMouseIn = (e) => e.target.style.backgroundColor = '#fafafa';
-const handleDayMouseOut = (e) => e.target.style.backgroundColor = 'unset';
+const handleDayMouseOut = (e) => e.target.style.backgroundColor = 'var(--backgroundColor)';
 const handleDayKeydown = (e, i, day, dayButtons) => {
+    if (e.key === 'Tab')
+        return;
     e.preventDefault();
     if (e.key === 'Enter') {
         setDayView(day);
@@ -269,14 +255,18 @@ const getDayView = (day) => {
         hourDiv.style.fontSize = '.8em';
         return hourDiv;
     }));
-    const eventDivs = Array.from({ length: 10 }, () => {
-        const div = document.createElement('div');
-        div.style.gridColumn = 'span 24';
-        div.style.height = '40px';
-        return div;
-    });
-    dayGrid.append(...eventDivs);
-    topDiv.append(dateHeader, addEventButton, dayNavigationButtonDiv);
+    const events = CONTROLLER.getEventsForDay(day);
+    if (events.length) {
+        const eventDivs = events.map(event => {
+            const div = document.createElement('div');
+            div.style.gridColumnStart = '5';
+            div.style.gridColumn = '5/ span 4';
+            div.textContent = event.description;
+            return div;
+        });
+        dayGrid.append(...eventDivs);
+    }
+    topDiv.append(goBackToMonthButton, dateHeader, addEventButton, dayNavigationButtonDiv);
     wrapper.append(topDiv, dayGrid);
     return wrapper;
 };
@@ -305,9 +295,11 @@ const getMonthView = (month) => {
         return dayOfTheWeekNameDiv;
     }));
     const dayButtons = month.map((day, i) => {
+        const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
         const dayButton = document.createElement('button');
         dayButton.type = 'button';
-        dayButton.style.backgroundColor = 'unset';
+        dayButton.setAttribute('style', `--backgroundColor: ${isToday ? 'lightblue' : 'unset'}`);
+        dayButton.style.backgroundColor = 'var(--backgroundColor)';
         dayButton.style.outline = 'unset';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
@@ -319,10 +311,6 @@ const getMonthView = (month) => {
         dayButton.addEventListener('pointerleave', handleDayMouseOut);
         dayButton.addEventListener('dblclick', () => setDayView(day));
         dayButton.addEventListener('keydown', (e) => handleDayKeydown(e, i, day, dayButtons));
-        const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
-        if (isToday) {
-            dayButton.style.backgroundColor = 'lightblue';
-        }
         if (i === 0) {
             dayButton.style.gridColumnStart = String(day.getDay() + 1);
         }

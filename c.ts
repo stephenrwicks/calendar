@@ -35,44 +35,15 @@ const CONTROLLER = (() => {
     let _currentMonth = todayMonth;
     let _currentDay = todayDay;
 
-    const CALENDAROBJECT: Partial<CalendarObject> = {};
-    let d = new Date(STARTYEAR, 0, 1);
-    while (d.getFullYear() <= ENDYEAR) {
-        const year = d.getFullYear() as Year;
-        CALENDAROBJECT[year] ??= {
-            1: [],
-            2: [],
-            3: [],
-            4: [],
-            5: [],
-            6: [],
-            7: [],
-            8: [],
-            9: [],
-            10: [],
-            11: [],
-            12: [],
-        };
-        const month = d.getMonth() + 1 as Month;
-        const x = CALENDAROBJECT[year];
-        if (x) x[month].push(new Date(d))
-        d.setDate(d.getDate() + 1);
-    }
-
-    // Month is 1 indexed
-    const getMonth = (year: Year, month: Month) => {
-        const x = CALENDAROBJECT[year];
-        if (x) return x[month];
-        throw new Error('Invalid year/month');
-    };
-
-    const getDay = (year: Year, month: Month, day: number) => {
-        const m = getMonth(year, month);
-        // Subtract one to offset 0-index so we can actually look up by day 
-        // (day 1 gets position 0 in array)
-        const d = m[day - 1];
-        if (!d) throw new Error('Invalid day');
-        return d;
+    const getMonth = (year: Year, month: Month): Date[] => {
+        const days = [];
+        const m = month - 1;
+        const d = new Date(year, m, 1);
+        while (d.getMonth() === m) {
+            days.push(new Date(d));
+            d.setDate(d.getDate() + 1);
+        }
+        return days;
     };
 
     const isSameDay = (start: Date, end: Date) => {
@@ -81,45 +52,36 @@ const CONTROLLER = (() => {
         const isDaySame = end.getDate() === start.getDate();
         return (isYearSame && isMonthSame && isDaySame);
     }
-    const getDatesBetweenStartAndEnd = (start: Date, end: Date): Date[] => {
-        if (Number(end) > Number(start)) throw new Error('End time is before start time?');
-        if (isSameDay(start, end)) return [];
-        const dates: Date[] = [];
-        let d = end;
+    // Includes end and start
+    const getDatesFromStartToEnd = (start: Date, end: Date): Date[] => {
+        if (Number(end) < Number(start)) throw new Error('End time is before start time?');
+        const dates: Date[] = [end];
+        if (isSameDay(start, end)) return dates;
+        let d = new Date(end);
         // Just walk backward one day and push until you get the start day
         while (true) {
             d.setDate(d.getDate() - 1);
             if (d.getFullYear() < STARTYEAR) break;
-            if (isSameDay(start, d)) break;
             dates.push(new Date(d));
+            if (isSameDay(start, d)) break;
         }
         return dates;
     };
 
-    // Start/end
-    const addEvent = (event: ScheduledEvent) => {
-        // Find all dates that are affected based on time span,
-        // then add them to the map. That way we can look them up individually
-        // e.g. Day X has no start/end events but has 3 events running through it
-        const timeSpan = () => {
+    const EVENTS: ScheduledEvent[] = [];
+    EVENTS.push({
+        startTime: new Date(2025, 9, 2),
+        endTime: new Date(2025, 9, 13),
+        name: 'test',
+        description: 'description',
+    });
 
-        };
-
-        eventMap.set(event.startTime, event);
+    // Seems to not be including start/end. It should account for time too (00:00)
+    const getEventsForDay = (day: Date) => {
+        return EVENTS.filter(event => {
+            return getDatesFromStartToEnd(event.startTime, event.endTime).some(date => isSameDay(date, day));
+        });
     };
-    const removeEvent = () => {
-
-    };
-
-    const getEventsByDay = () => {
-        // Need a way to look backward for time span? We have end dates, so...
-        // You can loop, but seems like there is a better way, like just add to each day
-    };
-
-    // We need it so that any given day can look up itself, however
-    // days with events spanning across them will not see with this, so maybe time span actually works best
-    // if I'm in a "timespan" day, how do I get events related to it? That means every timespanned day must immediately get mapped.
-    const eventMap: Map<Date, ScheduledEvent> = new Map();
 
     const getCurrentDate = (): Date => {
         return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
@@ -175,6 +137,7 @@ const CONTROLLER = (() => {
         goToPrevMonth,
         goToNextDay,
         goToPrevDay,
+        getEventsForDay,
     };
 
 })();
@@ -247,6 +210,7 @@ prevDayButton.addEventListener('click', () => {
 });
 
 const addEventButton = document.createElement('button');
+addEventButton.type = 'button';
 addEventButton.textContent = 'Add Event';
 addEventButton.addEventListener('click', async () => {
     await new Promise(resolve => {
@@ -260,6 +224,14 @@ addEventButton.addEventListener('click', async () => {
     });
 });
 
+const goBackToMonthButton = document.createElement('button');
+goBackToMonthButton.type = 'button';
+goBackToMonthButton.textContent = 'Back';
+goBackToMonthButton.addEventListener('click', () => {
+    const date = CONTROLLER.getCurrentDate();
+    setMonthView((date.getFullYear() as Year), ((date.getMonth() + 1) as Month), date.getDate() - 1);
+});
+
 const calendar = document.createElement('section');
 
 const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -268,10 +240,11 @@ const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June',
 const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '0px 0px 0px 2px inset darkblue';
 const handleDayFocusOut = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '';
 const handleDayMouseIn = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = '#fafafa';
-const handleDayMouseOut = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'unset'; // isToday breaks
+const handleDayMouseOut = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'var(--backgroundColor)';
 
 
 const handleDayKeydown = (e: KeyboardEvent, i: number, day: Date, dayButtons: HTMLButtonElement[]) => {
+    if (e.key === 'Tab') return;
     e.preventDefault();
     if (e.key === 'Enter') {
         setDayView(day);
@@ -317,8 +290,6 @@ const handleDayKeydown = (e: KeyboardEvent, i: number, day: Date, dayButtons: HT
 };
 
 const getDayView = (day: Date) => {
-    // Let's pass in the month so we can easily get back?
-    // You probably don't need month here if we have controller handling that (and it's cleaner that way)
     const wrapper = document.createElement('div');
     wrapper.style.width = '700px';
 
@@ -334,6 +305,8 @@ const getDayView = (day: Date) => {
     const dayGrid = document.createElement('div');
     dayGrid.style.display = 'grid';
     dayGrid.style.gridTemplateColumns = 'repeat(24, 1fr)';
+    // dayGrid.style.minHeight = '30vh';
+    // dayGrid.style.gridTemplateRows
 
     dayGrid.append(...Array.from({ length: 24 }, (_, i) => {
         const hourDiv = document.createElement('div');
@@ -344,19 +317,27 @@ const getDayView = (day: Date) => {
         return hourDiv;
     }));
 
-    const eventDivs = Array.from({ length: 10 }, () => {
-        const div = document.createElement('div');
-        // This isn't quite good because the hour borders can't go down. Unless we don't care
-        div.style.gridColumn = 'span 24';
-        div.style.height = '40px';
-        return div;
-    })
+    // All you do is start on a certain column and span from there
+    // Array from each event that touches this day
 
-    dayGrid.append(...eventDivs);
+    const events = CONTROLLER.getEventsForDay(day);
 
+    if (events.length) {
+        //,,, map to divs
+        // To get exact minutes you would have to have like 24 * 60 columns instead of 24
+        // Can probably nicely do 15 minute increments
+        const eventDivs = events.map(event => {
+            const div = document.createElement('div');
+            div.style.gridColumn = '5 / span 4';
+            div.textContent = event.description;
 
+            return div;
+        });
 
-    topDiv.append(dateHeader, addEventButton, dayNavigationButtonDiv);
+        dayGrid.append(...eventDivs);
+    }
+
+    topDiv.append(goBackToMonthButton, dateHeader, addEventButton, dayNavigationButtonDiv);
     wrapper.append(topDiv, dayGrid);
     return wrapper;
 
@@ -396,9 +377,12 @@ const getMonthView = (month: Date[]) => {
     }));
 
     const dayButtons = month.map((day, i) => {
+        const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
+
         const dayButton = document.createElement('button');
         dayButton.type = 'button';
-        dayButton.style.backgroundColor = 'unset';
+        dayButton.setAttribute('style', `--backgroundColor: ${isToday ? 'lightblue' : 'unset'}`);
+        dayButton.style.backgroundColor = 'var(--backgroundColor)';
         dayButton.style.outline = 'unset';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
@@ -412,11 +396,10 @@ const getMonthView = (month: Date[]) => {
         dayButton.addEventListener('dblclick', () => setDayView(day));
         dayButton.addEventListener('keydown', (e) => handleDayKeydown(e, i, day, dayButtons));
 
-        const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
 
-        if (isToday) {
-            dayButton.style.backgroundColor = 'lightblue';
-        }
+
+
+
 
         if (i === 0) {
             dayButton.style.gridColumnStart = String(day.getDay() + 1);
@@ -428,7 +411,7 @@ const getMonthView = (month: Date[]) => {
     topDiv.append(dateHeader, monthNavigationButtonDiv);
     monthGrid.append(...dayButtons);
     wrapper.append(topDiv, monthGrid);
-    // Maybe want to return an object containing the element and days
+
     return {
         element: wrapper,
         dayButtons
