@@ -21,13 +21,9 @@ const CONTROLLER = (() => {
         }
         return days;
     };
-    const isSameDay = (start, end) => {
-        const isYearSame = end.getFullYear() === start.getFullYear();
-        const isMonthSame = end.getMonth() === start.getMonth();
-        const isDaySame = end.getDate() === start.getDate();
-        return (isYearSame && isMonthSame && isDaySame);
-    };
-    const getDatesFromStartToEnd = (start, end) => {
+    const getDatesInRange = (event) => {
+        const start = event.startTime;
+        const end = event.endTime;
         if (Number(end) < Number(start))
             throw new Error('End time is before start time?');
         const dates = [end];
@@ -44,16 +40,34 @@ const CONTROLLER = (() => {
         }
         return dates;
     };
+    let eventId = 0;
     const EVENTS = [];
-    EVENTS.push({
-        startTime: new Date(2025, 9, 2),
-        endTime: new Date(2025, 9, 13),
-        name: 'test',
+    const upsertEvent = (scheduledEvent) => {
+        if ('id' in scheduledEvent && typeof scheduledEvent.id === 'number') {
+            const index = EVENTS.findIndex(event => event.id === scheduledEvent.id);
+            if (index === -1)
+                throw new Error('Event not found');
+            EVENTS.splice(1, index, scheduledEvent);
+            return;
+        }
+        const event = { ...scheduledEvent, id: ++eventId };
+        EVENTS.push(event);
+    };
+    const deleteEvent = (id) => {
+        const index = EVENTS.findIndex(event => event.id === id);
+        if (index === -1)
+            throw new Error('Event not found');
+        EVENTS.splice(1, index);
+    };
+    upsertEvent({
+        startTime: new Date(2025, 9, 22, 1),
+        endTime: new Date(2025, 9, 25, 4),
+        name: 'TESTING EVENT',
         description: 'description',
     });
     const getEventsForDay = (day) => {
         return EVENTS.filter(event => {
-            return getDatesFromStartToEnd(event.startTime, event.endTime).some(date => isSameDay(date, day));
+            return getDatesInRange(event).some(date => isSameDay(date, day));
         });
     };
     const getCurrentDate = () => {
@@ -71,9 +85,9 @@ const CONTROLLER = (() => {
     };
     const setCurrentMonth = (year, month) => {
         if (year > ENDYEAR || year < STARTYEAR)
-            throw new Error();
+            throw new Error('Exceeded max year range');
         if (month < 1 || month > 12)
-            throw new Error();
+            throw new Error('Invalid month');
         _currentYear = year;
         _currentMonth = month;
         _currentDay = 1;
@@ -108,6 +122,8 @@ const CONTROLLER = (() => {
         goToNextDay,
         goToPrevDay,
         getEventsForDay,
+        upsertEvent,
+        deleteEvent,
     };
 })();
 const body = document.body;
@@ -165,16 +181,133 @@ prevDayButton.addEventListener('click', () => {
 const addEventButton = document.createElement('button');
 addEventButton.type = 'button';
 addEventButton.textContent = 'Add Event';
-addEventButton.addEventListener('click', async () => {
-    await new Promise(resolve => {
-        const dialog = document.createElement('dialog');
-        pageWrapper.append(dialog);
-        dialog.style.width = '600px';
-        dialog.style.height = '600px';
-        dialog.textContent = 'Add event';
-        dialog.showModal();
+addEventButton.addEventListener('click', () => EventDialog());
+const EventDialog = async (event) => {
+    const dialog = document.createElement('dialog');
+    pageWrapper.append(dialog);
+    const { form, getResult } = EventForm(event);
+    dialog.append(form);
+    dialog.showModal();
+    const scheduledEvent = await getResult;
+    if (scheduledEvent) {
+        CONTROLLER.upsertEvent(scheduledEvent);
+    }
+    dialog.remove();
+};
+const EventForm = (event) => {
+    const { promise, resolve } = Promise.withResolvers();
+    const form = document.createElement('form');
+    form.style.display = 'grid';
+    form.style.gridTemplateColumns = '1fr 1fr';
+    form.style.gap = '1rem';
+    const nameDiv = document.createElement('div');
+    const nameLabel = document.createElement('label');
+    const nameInput = document.createElement('input');
+    nameDiv.style.display = 'grid';
+    nameLabel.htmlFor = 'name-input';
+    nameLabel.textContent = 'Name';
+    nameInput.id = 'name-input';
+    nameInput.type = 'text';
+    nameInput.required = true;
+    const descriptionDiv = document.createElement('div');
+    const descriptionLabel = document.createElement('label');
+    const descriptionInput = document.createElement('textarea');
+    descriptionDiv.style.display = 'grid';
+    descriptionDiv.style.gridColumn = 'span 2';
+    descriptionLabel.htmlFor = 'description-input';
+    descriptionLabel.textContent = 'Description';
+    descriptionInput.id = 'description-input';
+    descriptionInput.required = true;
+    descriptionInput.style.resize = 'none';
+    descriptionInput.style.height = '4rem';
+    const { fieldset: startDate, getDate: getStartTime } = DatePicker('Start Time', event?.startTime);
+    const { fieldset: endDate, getDate: getEndTime } = DatePicker('End Time', event?.endTime);
+    if (event) {
+        nameInput.value = event.name ?? '';
+        descriptionInput.value = event.description ?? '';
+    }
+    const okButton = document.createElement('button');
+    const cancelButton = document.createElement('button');
+    okButton.type = 'submit';
+    cancelButton.type = 'button';
+    okButton.textContent = 'OK';
+    cancelButton.textContent = 'Cancel';
+    const buttonDiv = document.createElement('div');
+    buttonDiv.style.display = 'flex';
+    buttonDiv.style.justifyContent = 'end';
+    buttonDiv.style.gap = '1rem';
+    buttonDiv.style.gridColumn = 'span 2';
+    buttonDiv.append(cancelButton, okButton);
+    cancelButton.addEventListener('click', () => resolve(null));
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        resolve({
+            ...(event ?? {}),
+            name: nameInput.value,
+            description: descriptionInput.value,
+            startTime: new Date(2025, 9, 1),
+            endTime: new Date(2025, 9, 30),
+        });
     });
-});
+    nameDiv.replaceChildren(nameLabel, nameInput);
+    descriptionDiv.replaceChildren(descriptionLabel, descriptionInput);
+    form.replaceChildren(nameDiv, descriptionDiv, startDate, endDate, buttonDiv);
+    return {
+        form,
+        getResult: promise
+    };
+};
+const DatePicker = (title, value) => {
+    const fieldset = document.createElement('fieldset');
+    fieldset.style.display = 'grid';
+    fieldset.style.margin = '0px';
+    fieldset.style.gap = '1rem';
+    const legend = document.createElement('legend');
+    legend.textContent = title;
+    const yearDiv = document.createElement('div');
+    const year = document.createElement('input');
+    const yearLabel = document.createElement('label');
+    const yearId = `_${crypto.randomUUID()}`;
+    yearDiv.style.display = 'grid';
+    year.id = yearId;
+    yearLabel.htmlFor = yearId;
+    yearLabel.textContent = 'Year';
+    year.type = 'number';
+    year.required = true;
+    year.maxLength = 4;
+    const monthDiv = document.createElement('div');
+    const month = document.createElement('input');
+    const monthLabel = document.createElement('label');
+    const monthId = `_${crypto.randomUUID()}`;
+    monthDiv.style.display = 'grid';
+    month.id = monthId;
+    monthLabel.htmlFor = monthId;
+    monthLabel.textContent = 'Month';
+    month.type = 'number';
+    month.required = true;
+    month.maxLength = 2;
+    const dayDiv = document.createElement('div');
+    const day = document.createElement('input');
+    const dayLabel = document.createElement('label');
+    const dayId = `_${crypto.randomUUID()}`;
+    dayDiv.style.display = 'grid';
+    day.id = dayId;
+    dayLabel.htmlFor = dayId;
+    dayLabel.textContent = 'Day';
+    day.type = 'number';
+    day.required = true;
+    day.maxLength = 2;
+    const getDate = () => {
+        return new Date(Number(year.value), Number(month.value) + 1, Number(day.value));
+    };
+    yearDiv.replaceChildren(yearLabel, year);
+    monthDiv.replaceChildren(monthLabel, month);
+    dayDiv.replaceChildren(dayLabel, day);
+    fieldset.replaceChildren(legend, yearDiv, monthDiv, dayDiv);
+    return {
+        fieldset, getDate
+    };
+};
 const goBackToMonthButton = document.createElement('button');
 goBackToMonthButton.type = 'button';
 goBackToMonthButton.textContent = 'Back';
@@ -245,23 +378,26 @@ const getDayView = (day) => {
     dateHeader.textContent = day.toISOString().split('T')[0];
     const dayGrid = document.createElement('div');
     dayGrid.style.display = 'grid';
-    dayGrid.style.gridTemplateColumns = 'repeat(24, 1fr)';
-    dayGrid.append(...Array.from({ length: 24 }, (_, i) => {
+    dayGrid.style.gridTemplateColumns = 'repeat(96, 1fr)';
+    let start = 1;
+    dayGrid.append(...Array.from({ length: 6 }, (_, i) => {
         const hourDiv = document.createElement('div');
-        if (i % 4 !== 0)
-            return hourDiv;
-        hourDiv.textContent = `${i}:00`;
+        hourDiv.style.gridColumnStart = String(start);
+        start = start + 16;
+        hourDiv.textContent = `${i * 4}:00`;
         hourDiv.style.textAlign = 'center';
         hourDiv.style.fontSize = '.8em';
         return hourDiv;
     }));
     const events = CONTROLLER.getEventsForDay(day);
     if (events.length) {
-        const eventDivs = events.map(event => {
+        const eventDivs = events.map((event, i) => {
             const div = document.createElement('div');
-            div.style.gridColumnStart = '5';
-            div.style.gridColumn = '5/ span 4';
-            div.textContent = event.description;
+            div.style.gridColumn = getGridColumnForEvent(day, event);
+            div.style.textAlign = 'center';
+            div.textContent = `${event.name} (${event.startTime.toLocaleDateString()} - ${event.endTime.toLocaleDateString()})`;
+            div.style.backgroundColor = 'hsla(140, 70%, 50%, 0.5)';
+            div.addEventListener('dblclick', () => EventDialog(event));
             return div;
         });
         dayGrid.append(...eventDivs);
@@ -269,6 +405,18 @@ const getDayView = (day) => {
     topDiv.append(goBackToMonthButton, dateHeader, addEventButton, dayNavigationButtonDiv);
     wrapper.append(topDiv, dayGrid);
     return wrapper;
+};
+const getTimeAs15MinuteIncrement = (d) => Math.floor(d.getHours() * 4) + Math.floor(d.getMinutes() / 15) + 1;
+const getGridColumnForEvent = (currentDay, event) => {
+    const isStartToday = isSameDay(event.startTime, currentDay);
+    const isEndToday = isSameDay(event.endTime, currentDay);
+    if (!isStartToday && !isEndToday)
+        return '1 / -1';
+    if (isStartToday && !isEndToday)
+        return `${getTimeAs15MinuteIncrement(event.startTime)} / -1`;
+    if (!isStartToday && isEndToday)
+        return `1 / ${getTimeAs15MinuteIncrement(event.endTime)}`;
+    return `${getTimeAs15MinuteIncrement(event.startTime)} / ${getTimeAs15MinuteIncrement(event.endTime)}`;
 };
 const getMonthView = (month) => {
     const wrapper = document.createElement('div');
@@ -284,6 +432,7 @@ const getMonthView = (month) => {
     dateHeader.textContent = `${monthsOfTheYear[m]} ${y}`;
     const monthGrid = document.createElement('div');
     monthGrid.style.boxSizing = 'border-box';
+    monthGrid.setAttribute('style', '--backgroundColor: unset');
     monthGrid.style.display = 'grid';
     monthGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
     monthGrid.style.gap = '1px';
@@ -298,7 +447,8 @@ const getMonthView = (month) => {
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
         const dayButton = document.createElement('button');
         dayButton.type = 'button';
-        dayButton.setAttribute('style', `--backgroundColor: ${isToday ? 'lightblue' : 'unset'}`);
+        if (isToday)
+            dayButton.setAttribute('style', '--backgroundColor: lightblue');
         dayButton.style.backgroundColor = 'var(--backgroundColor)';
         dayButton.style.outline = 'unset';
         dayButton.style.border = 'unset';
@@ -351,3 +501,12 @@ body.replaceChildren(pageWrapper);
         await new Promise(r => setTimeout(r, 1000));
     }
 })();
+const isSameDay = (a, b) => {
+    if (a.getDate() !== b.getDate())
+        return false;
+    if (a.getMonth() !== b.getMonth())
+        return false;
+    if (a.getFullYear() !== b.getFullYear())
+        return false;
+    return true;
+};
