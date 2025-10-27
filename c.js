@@ -1,13 +1,13 @@
 "use strict";
 let LIVETIME;
+const STARTYEAR = 2000;
+const ENDYEAR = 2050;
 const initTime = new Date();
 const todayYear = initTime.getFullYear();
 const todayMonth = (initTime.getMonth() + 1);
 const todayDay = initTime.getDate();
 let currentView = 'month';
 const CONTROLLER = (() => {
-    const STARTYEAR = 2000;
-    const ENDYEAR = 2050;
     let _currentYear = todayYear;
     let _currentMonth = todayMonth;
     let _currentDay = todayDay;
@@ -20,6 +20,21 @@ const CONTROLLER = (() => {
             d.setDate(d.getDate() + 1);
         }
         return days;
+    };
+    const getNumberOfDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        if (year > ENDYEAR || year < STARTYEAR)
+            throw new Error('Exceeded max year range');
+        const d = new Date(year, month, 28);
+        let n = 28;
+        while (true) {
+            d.setDate(d.getDate() + 1);
+            if (d.getDate() < n)
+                break;
+            n++;
+        }
+        return n;
     };
     const getDatesInRange = (event) => {
         const start = event.startTime;
@@ -44,27 +59,17 @@ const CONTROLLER = (() => {
     const EVENTS = [];
     const upsertEvent = (scheduledEvent) => {
         if ('id' in scheduledEvent && typeof scheduledEvent.id === 'number') {
-            const index = EVENTS.findIndex(event => event.id === scheduledEvent.id);
-            if (index === -1)
-                throw new Error('Event not found');
-            EVENTS.splice(1, index, scheduledEvent);
-            return;
+            deleteEvent(scheduledEvent.id);
         }
-        const event = { ...scheduledEvent, id: ++eventId };
-        EVENTS.push(event);
+        const newEvent = { ...scheduledEvent, id: ++eventId };
+        EVENTS.push(newEvent);
     };
     const deleteEvent = (id) => {
         const index = EVENTS.findIndex(event => event.id === id);
         if (index === -1)
             throw new Error('Event not found');
-        EVENTS.splice(1, index);
+        EVENTS.splice(index, 1);
     };
-    upsertEvent({
-        startTime: new Date(2025, 9, 22, 1),
-        endTime: new Date(2025, 9, 25, 4),
-        name: 'TESTING EVENT',
-        description: 'description',
-    });
     const getEventsForDay = (day) => {
         return EVENTS.filter(event => {
             return getDatesInRange(event).some(date => isSameDay(date, day));
@@ -124,6 +129,7 @@ const CONTROLLER = (() => {
         getEventsForDay,
         upsertEvent,
         deleteEvent,
+        getNumberOfDaysInMonth,
     };
 })();
 const body = document.body;
@@ -181,11 +187,11 @@ prevDayButton.addEventListener('click', () => {
 const addEventButton = document.createElement('button');
 addEventButton.type = 'button';
 addEventButton.textContent = 'Add Event';
-addEventButton.addEventListener('click', () => EventDialog());
-const EventDialog = async (event) => {
+addEventButton.addEventListener('click', () => eventDialog());
+const eventDialog = async (event) => {
     const dialog = document.createElement('dialog');
     pageWrapper.append(dialog);
-    const { form, getResult } = EventForm(event);
+    const { form, getResult } = eventForm(event);
     dialog.append(form);
     dialog.showModal();
     const scheduledEvent = await getResult;
@@ -193,8 +199,11 @@ const EventDialog = async (event) => {
         CONTROLLER.upsertEvent(scheduledEvent);
     }
     dialog.remove();
+    if (currentView === 'day') {
+        setDayView(CONTROLLER.getCurrentDate());
+    }
 };
-const EventForm = (event) => {
+const eventForm = (event) => {
     const { promise, resolve } = Promise.withResolvers();
     const form = document.createElement('form');
     form.style.display = 'grid';
@@ -209,6 +218,8 @@ const EventForm = (event) => {
     nameInput.id = 'name-input';
     nameInput.type = 'text';
     nameInput.required = true;
+    nameInput.maxLength = 40;
+    nameInput.pattern = '\\S.*';
     const descriptionDiv = document.createElement('div');
     const descriptionLabel = document.createElement('label');
     const descriptionInput = document.createElement('textarea');
@@ -217,11 +228,11 @@ const EventForm = (event) => {
     descriptionLabel.htmlFor = 'description-input';
     descriptionLabel.textContent = 'Description';
     descriptionInput.id = 'description-input';
-    descriptionInput.required = true;
+    descriptionInput.maxLength = 500;
     descriptionInput.style.resize = 'none';
     descriptionInput.style.height = '4rem';
-    const { fieldset: startDate, getDate: getStartTime } = DatePicker('Start Time', event?.startTime);
-    const { fieldset: endDate, getDate: getEndTime } = DatePicker('End Time', event?.endTime);
+    const { fieldset: startDate, getDate: getStartTime } = datePicker('Start Time', event?.startTime);
+    const { fieldset: endDate, getDate: getEndTime } = datePicker('End Time', event?.endTime);
     if (event) {
         nameInput.value = event.name ?? '';
         descriptionInput.value = event.description ?? '';
@@ -243,10 +254,11 @@ const EventForm = (event) => {
         e.preventDefault();
         resolve({
             ...(event ?? {}),
-            name: nameInput.value,
-            description: descriptionInput.value,
-            startTime: new Date(2025, 9, 1),
-            endTime: new Date(2025, 9, 30),
+            name: nameInput.value.trim(),
+            description: descriptionInput.value.trim(),
+            startTime: getStartTime(),
+            endTime: getEndTime(),
+            color: event?.color ?? getRandomColor(),
         });
     });
     nameDiv.replaceChildren(nameLabel, nameInput);
@@ -257,7 +269,7 @@ const EventForm = (event) => {
         getResult: promise
     };
 };
-const DatePicker = (title, value) => {
+const datePicker = (title, value = CONTROLLER.getCurrentDate()) => {
     const fieldset = document.createElement('fieldset');
     fieldset.style.display = 'grid';
     fieldset.style.margin = '0px';
@@ -265,47 +277,107 @@ const DatePicker = (title, value) => {
     const legend = document.createElement('legend');
     legend.textContent = title;
     const yearDiv = document.createElement('div');
-    const year = document.createElement('input');
+    const yearSelect = document.createElement('select');
     const yearLabel = document.createElement('label');
     const yearId = `_${crypto.randomUUID()}`;
     yearDiv.style.display = 'grid';
-    year.id = yearId;
+    yearSelect.id = yearId;
     yearLabel.htmlFor = yearId;
     yearLabel.textContent = 'Year';
-    year.type = 'number';
-    year.required = true;
-    year.maxLength = 4;
+    yearSelect.required = true;
     const monthDiv = document.createElement('div');
-    const month = document.createElement('input');
+    const monthSelect = document.createElement('select');
     const monthLabel = document.createElement('label');
     const monthId = `_${crypto.randomUUID()}`;
     monthDiv.style.display = 'grid';
-    month.id = monthId;
+    monthSelect.id = monthId;
     monthLabel.htmlFor = monthId;
     monthLabel.textContent = 'Month';
-    month.type = 'number';
-    month.required = true;
-    month.maxLength = 2;
+    monthSelect.required = true;
     const dayDiv = document.createElement('div');
-    const day = document.createElement('input');
+    const daySelect = document.createElement('select');
     const dayLabel = document.createElement('label');
     const dayId = `_${crypto.randomUUID()}`;
     dayDiv.style.display = 'grid';
-    day.id = dayId;
+    daySelect.id = dayId;
     dayLabel.htmlFor = dayId;
     dayLabel.textContent = 'Day';
-    day.type = 'number';
-    day.required = true;
-    day.maxLength = 2;
-    const getDate = () => {
-        return new Date(Number(year.value), Number(month.value) + 1, Number(day.value));
+    daySelect.required = true;
+    const timeDiv = document.createElement('div');
+    const hourSelect = document.createElement('select');
+    const minuteSelect = document.createElement('select');
+    const amPmSelect = document.createElement('select');
+    timeDiv.style.display = 'flex';
+    timeDiv.style.gap = '.5rem';
+    hourSelect.required = true;
+    minuteSelect.required = true;
+    amPmSelect.required = true;
+    for (let y = STARTYEAR; y <= ENDYEAR; y++) {
+        yearSelect.add(new Option(String(y), String(y)));
+    }
+    for (let m = 0; m <= 11; m++) {
+        monthSelect.add(new Option(monthsOfTheYear[m], String(m)));
+    }
+    for (let d = 1; d <= CONTROLLER.getNumberOfDaysInMonth(value); d++) {
+        daySelect.add(new Option(String(d), String(d)));
+    }
+    for (let h = 1; h <= 12; h++) {
+        hourSelect.add(new Option(String(h), String(h)));
+    }
+    minuteSelect.add(new Option('00', '0'));
+    minuteSelect.add(new Option('15', '15'));
+    minuteSelect.add(new Option('30', '30'));
+    minuteSelect.add(new Option('45', '40'));
+    amPmSelect.add(new Option('AM', 'AM'));
+    amPmSelect.add(new Option('PM', 'PM'));
+    const setDate = (value) => {
+        yearSelect.value = String(value.getFullYear());
+        monthSelect.value = String(value.getMonth());
+        daySelect.value = String(value.getDate());
+        let hours = value.getHours();
+        if (hours === 0)
+            hours = 12;
+        hourSelect.value = hours > 12 ? String(hours - 12) : String(hours);
+        amPmSelect.value = value.getHours() >= 12 ? 'PM' : 'AM';
+        let minutes = value.getMinutes();
+        let minutesValue;
+        if (minutes < 15)
+            minutesValue = '0';
+        else if (minutes < 30)
+            minutesValue = '15';
+        else if (minutes < 45)
+            minutesValue = '30';
+        else
+            minutesValue = '45';
+        minuteSelect.value = minutesValue;
     };
-    yearDiv.replaceChildren(yearLabel, year);
-    monthDiv.replaceChildren(monthLabel, month);
-    dayDiv.replaceChildren(dayLabel, day);
-    fieldset.replaceChildren(legend, yearDiv, monthDiv, dayDiv);
+    setDate(value);
+    const getDate = () => {
+        const isPm = amPmSelect.value === 'PM';
+        let h = Number(hourSelect.value);
+        if (h === 12) {
+            h = 0;
+        }
+        if (isPm) {
+            h = h + 12;
+        }
+        return new Date(Number(yearSelect.value), Number(monthSelect.value), Number(daySelect.value), h, Number(minuteSelect.value));
+    };
+    fieldset.addEventListener('change', () => {
+        const dayState = daySelect.value;
+        daySelect.replaceChildren();
+        for (let d = 1; d <= CONTROLLER.getNumberOfDaysInMonth(getDate()); d++) {
+            daySelect.add(new Option(String(d), String(d)));
+        }
+        daySelect.value = dayState;
+    });
+    yearDiv.replaceChildren(yearLabel, yearSelect);
+    monthDiv.replaceChildren(monthLabel, monthSelect);
+    dayDiv.replaceChildren(dayLabel, daySelect);
+    timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect);
+    fieldset.replaceChildren(legend, yearDiv, monthDiv, dayDiv, timeDiv);
     return {
-        fieldset, getDate
+        fieldset, getDate, setDate
     };
 };
 const goBackToMonthButton = document.createElement('button');
@@ -378,26 +450,27 @@ const getDayView = (day) => {
     dateHeader.textContent = day.toISOString().split('T')[0];
     const dayGrid = document.createElement('div');
     dayGrid.style.display = 'grid';
+    dayGrid.style.rowGap = '2rem';
     dayGrid.style.gridTemplateColumns = 'repeat(96, 1fr)';
-    let start = 1;
-    dayGrid.append(...Array.from({ length: 6 }, (_, i) => {
+    let gridColumnStart = 1;
+    ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM'].map(time => {
         const hourDiv = document.createElement('div');
-        hourDiv.style.gridColumnStart = String(start);
-        start = start + 16;
-        hourDiv.textContent = `${i * 4}:00`;
-        hourDiv.style.textAlign = 'center';
+        hourDiv.style.gridColumn = `${gridColumnStart} / span 16`;
+        gridColumnStart = gridColumnStart + 16;
+        hourDiv.textContent = time;
         hourDiv.style.fontSize = '.8em';
-        return hourDiv;
-    }));
+        dayGrid.append(hourDiv);
+    });
     const events = CONTROLLER.getEventsForDay(day);
     if (events.length) {
-        const eventDivs = events.map((event, i) => {
+        const eventDivs = events.map((event) => {
             const div = document.createElement('div');
+            div.style.height = '3rem';
+            div.style.backgroundColor = event.color;
             div.style.gridColumn = getGridColumnForEvent(day, event);
             div.style.textAlign = 'center';
             div.textContent = `${event.name} (${event.startTime.toLocaleDateString()} - ${event.endTime.toLocaleDateString()})`;
-            div.style.backgroundColor = 'hsla(140, 70%, 50%, 0.5)';
-            div.addEventListener('dblclick', () => EventDialog(event));
+            div.addEventListener('dblclick', () => eventDialog(event));
             return div;
         });
         dayGrid.append(...eventDivs);
@@ -509,4 +582,19 @@ const isSameDay = (a, b) => {
     if (a.getFullYear() !== b.getFullYear())
         return false;
     return true;
+};
+const getRandomColor = () => {
+    const colors = [
+        'hsla(17, 82%, 46%, 0.5)',
+        'hsla(202, 65%, 58%, 0.5)',
+        'hsla(281, 73%, 41%, 0.5)',
+        'hsla(124, 69%, 52%, 0.5)',
+        'hsla(348, 77%, 49%, 0.5)',
+        'hsla(46, 88%, 60%, 0.5)',
+        'hsla(192, 71%, 44%, 0.5)',
+        'hsla(263, 67%, 55%, 0.5)',
+        'hsla(97, 75%, 47%, 0.5)',
+        'hsla(329, 63%, 53%, 0.5)',
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
 };
