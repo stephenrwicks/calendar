@@ -11,12 +11,11 @@ type CalendarObject = {
 }
 
 type ScheduledEvent = {
-    id: number,
     startTime: Date; // Here we use Date more like a timestamp. Then track back to the date in the calendar that it refers to. Since here we have month/day.
     endTime: Date;
     name: string;
     description: string;
-    color: string;
+    color?: string;
 }
 
 // It would have been fun to use the new Temporal API for this project but it's not widely available yet ~October 2025
@@ -81,27 +80,80 @@ const CONTROLLER = (() => {
         return dates;
     };
 
-    let eventId = 0; // Give every event a unique id by incrementing forever
-    const EVENTS: ScheduledEvent[] = [];
-    const upsertEvent = (scheduledEvent: ScheduledEvent | Omit<ScheduledEvent, 'id'>) => {
-        if ('id' in scheduledEvent && typeof scheduledEvent.id === 'number') {
-            // IDs don't matter, so we can just delete
-            deleteEvent(scheduledEvent.id);
+    const EVENTMAP: Map<string, Set<ScheduledEvent>> = new Map();
+
+    const mapEventToDay = (scheduledEvent: ScheduledEvent, day: Date) => {
+        const dayString = day.toISOString().slice(0, 10); // Removes timestamp
+        const eventsSet = EVENTMAP.get(dayString);
+        if (eventsSet) {
+            eventsSet.add(scheduledEvent);
+            return;
         }
-        const newEvent: ScheduledEvent = { ...scheduledEvent, id: ++eventId };
-        EVENTS.push(newEvent);
-    };
-    const deleteEvent = (id: number) => {
-        const index = EVENTS.findIndex(event => event.id === id);
-        if (index === -1) throw new Error('Event not found');
-        EVENTS.splice(index, 1);
+        const newEventsSet: Set<ScheduledEvent> = new Set();
+        newEventsSet.add(scheduledEvent)
+        EVENTMAP.set(dayString, newEventsSet);
     };
 
-    const getEventsForDay = (day: Date) => {
-        return EVENTS.filter(event => {
-            return getDatesInRange(event).some(date => isSameDay(date, day));
-        });
+    const removeEvent = (scheduledEvent: ScheduledEvent) => {
+        const dates = getDatesInRange(scheduledEvent);
+        for (const date of dates) {
+            const dayString = date.toISOString().slice(0, 10); // Removes timestamp
+            const eventsSet = EVENTMAP.get(dayString);
+            eventsSet?.delete(scheduledEvent);
+            // mapEventToDay(scheduledEvent as ScheduledEvent, date);
+        }
     };
+
+    //let eventId = 0; // Give every event a unique id by incrementing forever
+    // Do we care about ID if we use Map + Set? No
+
+    const addEvent = (scheduledEvent: ScheduledEvent) => {
+        const dates = getDatesInRange(scheduledEvent as ScheduledEvent);
+        scheduledEvent.color ??= getRandomColor();
+        for (const date of dates) {
+            mapEventToDay(scheduledEvent as ScheduledEvent, date);
+        }
+    }
+
+    const updateEvent = (scheduledEvent: ScheduledEvent, updatedData: { name: string, description: string, startTime: Date, endTime: Date }) => {
+        // This method is necessary because when times change we  potentially have to unmap and remap the event to different days
+        // So instead of directly mutating the dates, we can remove and re-add the event object, while never losing the direct reference
+        // Could also just go immutable and remove old object and add new one
+        removeEvent(scheduledEvent);
+        scheduledEvent.name = updatedData.name.trim();
+        scheduledEvent.description = updatedData.description.trim();
+        scheduledEvent.startTime = updatedData.startTime;
+        scheduledEvent.endTime = updatedData.endTime;
+        addEvent(scheduledEvent);
+    };
+
+    const getEventsForDayWithMap = (day: Date) => {
+        return EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
+    };
+
+    // const EVENTS: ScheduledEvent[] = [];
+    // const upsertEvent = (scheduledEvent: ScheduledEvent) => {
+    //     if ('id' in scheduledEvent && typeof scheduledEvent.id === 'number') {
+    //         // IDs don't matter, so we can just delete
+    //         deleteEvent(scheduledEvent.id);
+    //     }
+    //     const newEvent: ScheduledEvent = { ...scheduledEvent, id: ++eventId };
+    //     EVENTS.push(newEvent);
+    // };
+    // const deleteEvent = (id: number) => {
+    //     const index = EVENTS.findIndex(event => event.id === id);
+    //     if (index === -1) throw new Error('Event not found');
+    //     EVENTS.splice(index, 1);
+    // };
+
+    // const getEventsForDay = (day: Date) => {
+    //     // Need to fix this so that nested loop isn't necessary
+    //     // Map Day => Event rather than the other way around
+    //     // When an event is added you have to map it to each day in range
+    //     return EVENTS.filter(event => {
+    //         return getDatesInRange(event).some(date => isSameDay(date, day));
+    //     });
+    // };
 
     const getCurrentDate = (): Date => {
         return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
@@ -158,9 +210,10 @@ const CONTROLLER = (() => {
         goToPrevMonth,
         goToNextDay,
         goToPrevDay,
-        getEventsForDay,
-        upsertEvent,
-        deleteEvent,
+        getEventsForDayWithMap,
+        addEvent,
+        updateEvent,
+        removeEvent,
         getNumberOfDaysInMonth,
     };
 
@@ -172,6 +225,7 @@ body.style.height = '100vh';
 body.style.paddingTop = '10vh';
 
 const pageWrapper = document.createElement('div');
+pageWrapper.style.fontFamily = 'Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif';
 
 const title = document.createElement('title');
 document.head.append(title);
@@ -233,18 +287,22 @@ addEventButton.type = 'button';
 addEventButton.textContent = 'Add Event';
 addEventButton.addEventListener('click', () => eventDialog());
 
-const eventDialog = async (event?: ScheduledEvent) => {
+const eventDialog = async (scheduledEvent?: ScheduledEvent) => {
     const dialog = document.createElement('dialog');
+    dialog.style.borderColor = scheduledEvent?.color ?? '#ccc';
+    dialog.addEventListener('cancel', () => dialog.remove());
     pageWrapper.append(dialog);
-    // dialog.style.width = '600px';
-    // dialog.style.height = '600px';
-    const { form, getResult } = eventForm(event);
+    const { form, getResult } = eventForm(scheduledEvent);
     dialog.append(form);
     dialog.showModal();
-    const scheduledEvent = await getResult;
-    if (scheduledEvent) {
-        CONTROLLER.upsertEvent(scheduledEvent);
+    const result = await getResult;
+    if (result && scheduledEvent) {
+        CONTROLLER.updateEvent(scheduledEvent, result);
     }
+    else if (result) {
+        CONTROLLER.addEvent(result);
+    }
+
     dialog.remove();
     if (currentView === 'day') {
         setDayView(CONTROLLER.getCurrentDate());
@@ -253,10 +311,10 @@ const eventDialog = async (event?: ScheduledEvent) => {
 
 // This is going to be used twice because of editing
 // Maybe pointless decoupling here though
-const eventForm = (event?: ScheduledEvent) => {
+const eventForm = (scheduledEvent?: ScheduledEvent) => {
     //console.log(event);
     // Clean pattern using withResolvers and a form and exporting them separately
-    const { promise, resolve } = Promise.withResolvers<ScheduledEvent | Omit<ScheduledEvent, 'id'> | null>();
+    const { promise, resolve } = Promise.withResolvers<Omit<ScheduledEvent, 'color'> | null>();
     const form = document.createElement('form');
     form.style.display = 'grid';
     form.style.gridTemplateColumns = '1fr 1fr';
@@ -266,6 +324,7 @@ const eventForm = (event?: ScheduledEvent) => {
     const nameLabel = document.createElement('label');
     const nameInput = document.createElement('input');
     nameDiv.style.display = 'grid';
+    nameLabel.style.width = 'min-content';
     nameLabel.htmlFor = 'name-input';
     nameLabel.textContent = 'Name';
     nameInput.id = 'name-input';
@@ -278,6 +337,7 @@ const eventForm = (event?: ScheduledEvent) => {
     const descriptionInput = document.createElement('textarea');
     descriptionDiv.style.display = 'grid';
     descriptionDiv.style.gridColumn = 'span 2';
+    descriptionLabel.style.width = 'min-content';
     descriptionLabel.htmlFor = 'description-input';
     descriptionLabel.textContent = 'Description';
     descriptionInput.id = 'description-input';
@@ -288,12 +348,12 @@ const eventForm = (event?: ScheduledEvent) => {
     // Need a way to validate these two dates against each other without breaking the query rule.
     // Could pass up a function that fires reportValidity/setCustom etc
     // Maybe end should not even populate / show until start is filled out
-    const { fieldset: startDate, getDate: getStartTime } = datePicker('Start Time', event?.startTime);
-    const { fieldset: endDate, getDate: getEndTime } = datePicker('End Time', event?.endTime);
+    const { datePickerEl: startDateEl, getDate: getStartTime } = datePicker('Start Time', scheduledEvent?.startTime);
+    const { datePickerEl: endDateEl, getDate: getEndTime } = datePicker('End Time', scheduledEvent?.endTime);
 
-    if (event) {
-        nameInput.value = event.name ?? '';
-        descriptionInput.value = event.description ?? '';
+    if (scheduledEvent) {
+        nameInput.value = scheduledEvent.name ?? '';
+        descriptionInput.value = scheduledEvent.description ?? '';
     }
 
     const okButton = document.createElement('button');
@@ -312,14 +372,13 @@ const eventForm = (event?: ScheduledEvent) => {
     cancelButton.addEventListener('click', () => resolve(null));
     form.addEventListener('submit', (e) => {
         e.preventDefault();
-        resolve({
-            ...(event ?? {}),
-            name: nameInput.value.trim(),
-            description: descriptionInput.value.trim(),
+        const eventData = {
+            name: nameInput.value,
+            description: descriptionInput.value,
             startTime: getStartTime(),
             endTime: getEndTime(),
-            color: event?.color ?? getRandomColor(),
-        });
+        };
+        resolve(eventData);
     });
 
     nameDiv.replaceChildren(nameLabel, nameInput);
@@ -327,8 +386,8 @@ const eventForm = (event?: ScheduledEvent) => {
     form.replaceChildren(
         nameDiv,
         descriptionDiv,
-        startDate,
-        endDate,
+        startDateEl,
+        endDateEl,
         buttonDiv
     )
     return {
@@ -465,8 +524,14 @@ const datePicker = (title: string, value: Date = CONTROLLER.getCurrentDate()) =>
     timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect)
     fieldset.replaceChildren(legend, yearDiv, monthDiv, dayDiv, timeDiv);
 
+    const dayDiv2 = document.createElement('div');
+    dayDiv2.style.display = 'flex';
+    dayDiv2.style.gap = '.5rem';
+    dayDiv2.append(monthSelect, daySelect, yearSelect);
+    fieldset.replaceChildren(legend, dayDiv2, timeDiv);
+
     return {
-        fieldset, getDate, setDate
+        datePickerEl: fieldset, getDate, setDate
     };
 };
 
@@ -486,7 +551,7 @@ const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June',
 
 const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '0px 0px 0px 2px inset darkblue';
 const handleDayFocusOut = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '';
-const handleDayMouseIn = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = '#fafafa';
+const handleDayMouseIn = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'var(--hoverBackgroundColor)';
 const handleDayMouseOut = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'var(--backgroundColor)';
 
 
@@ -554,35 +619,43 @@ const getDayView = (day: Date) => {
     dayGrid.style.display = 'grid';
     dayGrid.style.rowGap = '2rem';
     dayGrid.style.gridTemplateColumns = 'repeat(96, 1fr)';
+    dayGrid.style.minHeight = '12rem';
+    dayGrid.style.padding = '.2rem';
+    dayGrid.style.outline = '1px solid #ccc';
 
-    let gridColumnStart = 1; // Instead of starting at 1 could start at ~10 and get different times
-    ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM'].map(time => {
+    let gridColumnStart = 1;
+    for (const time of ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM']) {
         const hourDiv = document.createElement('div');
         hourDiv.style.gridColumn = `${gridColumnStart} / span 16`;
         // Increment by 16 because we are dividing 96 into 6 equal parts
         gridColumnStart = gridColumnStart + 16;
         hourDiv.textContent = time;
-        // hourDiv.style.textAlign = 'center';
         hourDiv.style.fontSize = '.8em';
+        hourDiv.style.pointerEvents = 'none';
         dayGrid.append(hourDiv);
-    });
+    }
 
-    const events = CONTROLLER.getEventsForDay(day);
-    if (events.length) {
-        const eventDivs = events.map((event) => {
-            const div = document.createElement('div');
-            div.style.height = '3rem';
-            div.style.backgroundColor = event.color;
-            div.style.gridColumn = getGridColumnForEvent(day, event);
-            div.style.textAlign = 'center';
-            div.textContent = `${event.name} (${event.startTime.toLocaleDateString()} - ${event.endTime.toLocaleDateString()})`;
+    for (const event of CONTROLLER.getEventsForDayWithMap(day)) {
+        const eventButton = document.createElement('button');
+        eventButton.style.border = 'unset';
+        eventButton.style.outline = 'unset';
+        eventButton.style.borderRadius = '0px';
+        eventButton.style.display = 'grid';
+        eventButton.style.placeItems = 'center';
+        eventButton.style.height = '3rem';
+        eventButton.style.cursor = 'pointer';
+        eventButton.style.backgroundColor = event.color ?? getRandomColor();
+        eventButton.style.gridColumn = getGridColumnForEvent(day, event);
+        //div.textContent = `${event.name} (${event.startTime.toLocaleDateString()} - ${event.endTime.toLocaleDateString()})`;
+        eventButton.textContent = event.name;
+        eventButton.addEventListener('pointerenter', () => eventButton.style.filter = 'brightness(1.2)');
+        eventButton.addEventListener('pointerleave', () => eventButton.style.filter = '');
+        eventButton.addEventListener('dblclick', () => eventDialog(event));
+        eventButton.addEventListener('keydown', (e) => e.key === 'Enter' && eventDialog(event));
+        eventButton.addEventListener('focusin', handleDayFocusIn)
+        eventButton.addEventListener('focusout', handleDayFocusOut);
 
-            div.addEventListener('dblclick', () => eventDialog(event));
-
-            return div;
-        });
-
-        dayGrid.append(...eventDivs);
+        dayGrid.append(eventButton);
     }
 
     topDiv.append(goBackToMonthButton, dateHeader, addEventButton, dayNavigationButtonDiv);
@@ -625,8 +698,6 @@ const getMonthView = (month: Date[]) => {
 
     const monthGrid = document.createElement('div');
     monthGrid.style.boxSizing = 'border-box';
-
-    monthGrid.setAttribute('style', '--backgroundColor: unset');
     monthGrid.style.display = 'grid';
     monthGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
     monthGrid.style.gap = '1px';
@@ -644,9 +715,10 @@ const getMonthView = (month: Date[]) => {
 
         const dayButton = document.createElement('button');
         dayButton.type = 'button';
-        if (isToday) dayButton.setAttribute('style', '--backgroundColor: lightblue');
+        // Leveraging different inline variable values which then get toggled by JS - This is pretty nice
+        dayButton.style.setProperty('--backgroundColor', isToday ? 'lightblue' : 'unset');
+        dayButton.style.setProperty('--hoverBackgroundColor', isToday ? 'cyan' : '#fafafa');
         dayButton.style.backgroundColor = 'var(--backgroundColor)';
-        dayButton.style.outline = 'unset';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
         dayButton.style.padding = '8px';
@@ -731,3 +803,10 @@ const getRandomColor = () => {
     ];
     return colors[Math.floor(Math.random() * colors.length)];
 }
+
+const styledSelectElement = () => {
+    const select = document.createElement('select');
+
+
+    return select;
+};
