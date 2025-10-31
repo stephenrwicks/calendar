@@ -28,6 +28,9 @@ const todayYear = initTime.getFullYear() as Year;
 const todayMonth = (initTime.getMonth() + 1) as Month;
 const todayDay = initTime.getDate();
 let currentView: 'month' | 'day' = 'month';
+const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 
 const CONTROLLER = (() => {
     // Initializes where to start on the calendar
@@ -98,7 +101,7 @@ const CONTROLLER = (() => {
 
     const addEvent = (scheduledEvent: ScheduledEvent) => {
         const dates = getDatesInRange(scheduledEvent as ScheduledEvent);
-        scheduledEvent.color ??= getRandomColor();
+        scheduledEvent.color ??= UI.getRandomColor();
         for (const date of dates) {
             mapEventToDay(scheduledEvent as ScheduledEvent, date);
         }
@@ -188,6 +191,116 @@ const CONTROLLER = (() => {
 
 })();
 
+type Theme = {
+    primaryColor: string;
+    secondaryColor: string;
+    darkAccentColor: string;
+    lightAccentColor: string;
+    black: string;
+    white: string;
+    gray: string;
+    lightGray: string;
+    border: string;
+    boxShadow: string;
+    insetBoxShadow: string;
+    dropShadow: string;
+}
+
+const Themes: Record<string, Theme> = {
+    GreenTheme: (() => {
+        const primaryColor = 'green';
+        const secondaryColor = 'mintcream';
+        const darkAccentColor = 'hsla(180, 100%, 25%, 1)';
+        const lightAccentColor = 'hsla(180, 100%, 25%, .7)';
+        const gray = '#ccc';
+        const lightGray = '#eee';
+        const border = `1px solid ${primaryColor}`;
+        const boxShadow = `0px 1px 8px ${gray}`;
+        const insetBoxShadow = `0px 0px 1px 2px inset ${darkAccentColor}`;
+        const dropShadow = `drop-shadow(0px 0px 2px ${darkAccentColor})`;
+        const black = 'black';
+        const white = 'white';
+        return { black, white, primaryColor, darkAccentColor, lightAccentColor, secondaryColor, lightGray, gray, boxShadow, border, insetBoxShadow, dropShadow };
+    })(),
+};
+
+
+const UI = {
+    SetTheme(theme: 'green' | 'blue') {
+        let chosenTheme = Themes.GreenTheme;
+        if (theme === 'blue') {
+            // chosenTheme = BlueTheme;
+        }
+        // Inject CSS properties into parent. Should rerender colors automatically
+        for (const [key, value] of Object.entries(chosenTheme)) {
+            calendar.style.setProperty(`--${key}`, value)
+        }
+    },
+    Button(type: 'button' | 'submit' = 'button') {
+        const button = document.createElement('button');
+        button.type = type;
+        button.style.display = 'grid';
+        button.style.placeItems = 'center';
+        button.style.textAlign = 'center';
+        button.style.textWrap = 'balance';
+        button.style.userSelect = 'none';
+        button.style.cursor = 'pointer';
+        button.style.padding = '.4rem';
+        button.style.margin = '.4rem';
+        button.style.outline = '0px';
+        button.style.border = 'var(--border)';
+        button.style.borderRadius = '.2rem';
+        button.style.backgroundColor = 'var(--secondaryColor)';
+        button.style.color = 'var(--black)';
+        // hover, focus
+        button.addEventListener('focusin', () => button.style.filter = 'var(--dropShadow)');
+        button.addEventListener('focusout', () => button.style.filter = 'unset');
+        button.addEventListener('blur', () => button.style.filter = 'unset');
+        button.addEventListener('pointerenter', () => button.style.boxShadow = 'var(--boxShadow)');
+        button.addEventListener('pointerleave', () => button.style.boxShadow = '');
+
+        return button;
+    },
+    Textbox() {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.style.padding = '.5em';
+        input.style.margin = '.5em';
+        input.style.backgroundColor = 'var(--white)';
+        input.style.color = 'var(--black)';
+        input.style.borderRadius = '.2rem';
+
+
+        return input;
+    },
+    Select() {
+        const select = document.createElement('select');
+
+
+        return select;
+    },
+    Dialog() {
+        const dialog = document.createElement('dialog');
+        return dialog;
+    },
+    getRandomColor() {
+        const colors = [
+            'hsla(17, 82%, 46%, 0.5)',
+            'hsla(202, 65%, 58%, 0.5)',
+            'hsla(281, 73%, 41%, 0.5)',
+            'hsla(124, 69%, 52%, 0.5)',
+            'hsla(348, 77%, 49%, 0.5)',
+            'hsla(46, 88%, 60%, 0.5)',
+            'hsla(192, 71%, 44%, 0.5)',
+            'hsla(263, 67%, 55%, 0.5)',
+            'hsla(97, 75%, 47%, 0.5)',
+            'hsla(329, 63%, 53%, 0.5)',
+        ];
+        return colors[Math.floor(Math.random() * colors.length)];
+    },
+};
+
+
 const body = document.body;
 body.style.margin = '0px';
 body.style.height = '100vh';
@@ -215,10 +328,8 @@ main.style.paddingBottom = '5rem';
 const monthNavigationButtonDiv = document.createElement('div');
 monthNavigationButtonDiv.style.display = 'flex';
 monthNavigationButtonDiv.style.gap = '1rem';
-const nextButton = document.createElement('button');
-const prevButton = document.createElement('button');
-nextButton.style.width = '2.5rem';
-prevButton.style.width = '2.5rem';
+const nextButton = UI.Button();
+const prevButton = UI.Button();
 nextButton.textContent = '>';
 prevButton.textContent = '<';
 monthNavigationButtonDiv.replaceChildren(prevButton, nextButton);
@@ -234,10 +345,8 @@ prevButton.addEventListener('click', () => {
 const dayNavigationButtonDiv = document.createElement('div');
 dayNavigationButtonDiv.style.display = 'flex';
 dayNavigationButtonDiv.style.gap = '1rem';
-const nextDayButton = document.createElement('button');
-const prevDayButton = document.createElement('button');
-nextDayButton.style.width = '2.5rem';
-prevDayButton.style.width = '2.5rem';
+const nextDayButton = UI.Button();
+const prevDayButton = UI.Button();
 nextDayButton.textContent = '>';
 prevDayButton.textContent = '<';
 dayNavigationButtonDiv.replaceChildren(prevDayButton, nextDayButton);
@@ -251,16 +360,15 @@ prevDayButton.addEventListener('click', () => {
     setDayView(date);
 });
 
-const addEventButton = document.createElement('button');
-addEventButton.type = 'button';
+const addEventButton = UI.Button();
 addEventButton.textContent = 'Add Event';
 addEventButton.addEventListener('click', () => eventDialog());
 
 const eventDialog = async (scheduledEvent?: ScheduledEvent) => {
-    const dialog = document.createElement('dialog');
+    const dialog = UI.Dialog();
     dialog.style.borderColor = scheduledEvent?.color ?? '#ccc';
     dialog.addEventListener('cancel', () => dialog.remove());
-    pageWrapper.append(dialog);
+    calendar.append(dialog);
     const { form, getResult } = eventForm(scheduledEvent);
     dialog.append(form);
     dialog.showModal();
@@ -290,13 +398,12 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
 
     const nameDiv = document.createElement('div');
     const nameLabel = document.createElement('label');
-    const nameInput = document.createElement('input');
+    const nameInput = UI.Textbox();
     nameDiv.style.display = 'grid';
     nameLabel.style.width = 'min-content';
     nameLabel.htmlFor = 'name-input';
     nameLabel.textContent = 'Name';
     nameInput.id = 'name-input';
-    nameInput.type = 'text';
     nameInput.required = true;
     nameInput.maxLength = 40;
     nameInput.pattern = '\\S.*';
@@ -317,18 +424,23 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     // Maybe end should not even populate / show until start is filled out
     const defaultStart = CONTROLLER.getCurrentDate();
     const defaultEnd = new Date(defaultStart.getTime() + 3600000); // One hour
-    const { datePickerEl: startDateEl, getDate: getStartTime } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
-    const { datePickerEl: endDateEl, getDate: getEndTime } = datePicker('End', scheduledEvent?.endTime ?? defaultEnd);
+    const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
+    const { datePickerEl: endDateEl, getDate: getEndTime, setDate: setEndTime } = datePicker('End', scheduledEvent?.endTime ?? defaultEnd);
+
+    form.addEventListener('datechange', () => {
+        const startTime = getStartTime();
+        if (Number(startTime) > Number(getEndTime())) {
+            setEndTime(new Date(Number(startTime) + 3600000))
+        }
+    })
 
     if (scheduledEvent) {
         nameInput.value = scheduledEvent.name ?? '';
         descriptionInput.value = scheduledEvent.description ?? '';
     }
 
-    const okButton = document.createElement('button');
-    const cancelButton = document.createElement('button');
-    okButton.type = 'submit';
-    cancelButton.type = 'button';
+    const okButton = UI.Button('submit');
+    const cancelButton = UI.Button();
     okButton.textContent = 'OK';
     cancelButton.textContent = 'Cancel';
     const buttonDiv = document.createElement('div');
@@ -375,19 +487,19 @@ const datePicker = (title: string, value: Date) => {
     const legend = document.createElement('legend');
     legend.textContent = title;
 
-    const yearSelect = document.createElement('select');
+    const yearSelect = UI.Select();
     yearSelect.required = true;
 
-    const monthSelect = document.createElement('select');
+    const monthSelect = UI.Select();
     monthSelect.required = true;
 
-    const daySelect = document.createElement('select');
+    const daySelect = UI.Select();
     daySelect.required = true;
 
     const timeDiv = document.createElement('div');
-    const hourSelect = document.createElement('select');
-    const minuteSelect = document.createElement('select');
-    const amPmSelect = document.createElement('select');
+    const hourSelect = UI.Select();
+    const minuteSelect = UI.Select();
+    const amPmSelect = UI.Select();
     timeDiv.style.display = 'flex';
     timeDiv.style.gap = '.5rem';
     timeDiv.style.justifyContent = 'center';
@@ -456,14 +568,16 @@ const datePicker = (title: string, value: Date) => {
         );
     };
 
-    fieldset.addEventListener('change', () => {
+    fieldset.addEventListener('change', (e) => {
         // Update "day" input to reflect the number of days
-        const dayState = daySelect.value;
+        const dayState = Number(daySelect.value);
+        const numberOfDays = CONTROLLER.getNumberOfDaysInMonth(getDate());
         daySelect.replaceChildren();
-        for (let d = 1; d <= CONTROLLER.getNumberOfDaysInMonth(getDate()); d++) {
+        for (let d = 1; d <= numberOfDays; d++) {
             daySelect.add(new Option(String(d), String(d)));
         }
-        daySelect.value = dayState;
+        daySelect.value = String(dayState);
+        fieldset.dispatchEvent(new CustomEvent('datechange', { bubbles: true }));
     });
 
 
@@ -480,7 +594,7 @@ const datePicker = (title: string, value: Date) => {
 };
 
 
-const goBackToMonthButton = document.createElement('button');
+const goBackToMonthButton = UI.Button();
 goBackToMonthButton.type = 'button';
 goBackToMonthButton.textContent = 'Back';
 goBackToMonthButton.addEventListener('click', () => {
@@ -490,15 +604,10 @@ goBackToMonthButton.addEventListener('click', () => {
 
 const calendar = document.createElement('section');
 
-const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '0px 0px 0px 2px inset darkblue';
+const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = 'var(--insetBoxShadow)';
 const handleDayFocusOut = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '';
 const handleDayMouseIn = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'var(--hoverBackgroundColor)';
 const handleDayMouseOut = (e: Event) => (e.target as HTMLButtonElement).style.backgroundColor = 'var(--backgroundColor)';
-
-
 const handleDayKeydown = (e: KeyboardEvent, i: number, day: Date, dayButtons: HTMLButtonElement[]) => {
     if (e.key === 'Tab') return;
     e.preventDefault();
@@ -575,7 +684,7 @@ const getDayView = (day: Date) => {
         gridColumnStart = gridColumnStart + 16;
         hourDiv.textContent = time;
         hourDiv.style.fontSize = '.8em';
-        hourDiv.style.pointerEvents = 'none';
+        hourDiv.style.userSelect = 'none';
         dayGrid.append(hourDiv);
     }
 
@@ -588,9 +697,8 @@ const getDayView = (day: Date) => {
         eventButton.style.placeItems = 'center';
         eventButton.style.height = '3rem';
         eventButton.style.cursor = 'pointer';
-        eventButton.style.backgroundColor = event.color ?? getRandomColor();
+        eventButton.style.backgroundColor = event.color ?? UI.getRandomColor();
         eventButton.style.gridColumn = getGridColumnForEvent(day, event);
-        //div.textContent = `${event.name} (${event.startTime.toLocaleDateString()} - ${event.endTime.toLocaleDateString()})`;
         eventButton.textContent = event.name;
         eventButton.addEventListener('pointerenter', () => eventButton.style.filter = 'brightness(1.2)');
         eventButton.addEventListener('pointerleave', () => eventButton.style.filter = '');
@@ -598,11 +706,10 @@ const getDayView = (day: Date) => {
         eventButton.addEventListener('keydown', (e) => e.key === 'Enter' && eventDialog(event));
         eventButton.addEventListener('focusin', handleDayFocusIn)
         eventButton.addEventListener('focusout', handleDayFocusOut);
-
         dayGrid.append(eventButton);
     }
 
-    topDiv.append(goBackToMonthButton, dateHeader, addEventButton, dayNavigationButtonDiv);
+    topDiv.append(goBackToMonthButton, dateHeader, dayNavigationButtonDiv);
     wrapper.append(topDiv, dayGrid);
     return wrapper;
 
@@ -661,14 +768,19 @@ const getMonthView = (month: Date[]) => {
 
         dayButton.type = 'button';
         // Leveraging different inline css variable values which then get toggled by JS - This is pretty nice
-        dayButton.style.setProperty('--backgroundColor', isToday ? 'lightblue' : 'unset');
-        dayButton.style.setProperty('--hoverBackgroundColor', isToday ? 'cyan' : '#fafafa');
+        dayButton.style.setProperty('--backgroundColor', isToday ? 'var(--darkAccentColor)' : 'unset');
+        dayButton.style.setProperty('--hoverBackgroundColor', isToday ? 'var(--lightAccentColor)' : 'var(--lightGray');
+        dayButton.style.color = isToday ? 'white' : '';
         dayButton.style.backgroundColor = 'var(--backgroundColor)';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
+        dayButton.style.cursor = 'pointer';
         dayButton.style.padding = '.5rem';
         dayButton.style.outline = '1px solid #ccc';
-        dayButton.addEventListener('focusin', handleDayFocusIn)
+        dayButton.addEventListener('focusin', (e) => {
+            handleDayFocusIn(e);
+            CONTROLLER.setCurrentDate(day)
+        })
         dayButton.addEventListener('focusout', handleDayFocusOut);
         dayButton.addEventListener('pointerenter', handleDayMouseIn);
         dayButton.addEventListener('pointerleave', handleDayMouseOut);
@@ -707,10 +819,17 @@ const getMonthView = (month: Date[]) => {
     };
 };
 
+const footerSection = document.createElement('div');
+footerSection.style.display = 'flex';
+footerSection.style.justifyContent = 'end';
+footerSection.style.height = 'max(3rem, fit-content)';
+footerSection.style.marginTop = '3rem';
+footerSection.append(addEventButton);
+
 const setMonthView = (year: Year, month: Month, focusIndex?: number) => {
     currentView = 'month';
     const { element, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
-    calendar.replaceChildren(element);
+    calendar.replaceChildren(element, footerSection);
     if (typeof focusIndex === 'number') {
         // Here I can work from the end easily using negative .at()
         dayButtons.at(focusIndex)?.focus();
@@ -719,7 +838,7 @@ const setMonthView = (year: Year, month: Month, focusIndex?: number) => {
 const setDayView = (day: Date) => {
     currentView = 'day';
     CONTROLLER.setCurrentDate(day);
-    calendar.replaceChildren(getDayView(day));
+    calendar.replaceChildren(getDayView(day), footerSection);
 };
 
 
@@ -741,40 +860,13 @@ const isSameDay = (a: Date, b: Date) => {
     return true;
 }
 
-const getRandomColor = () => {
-    const colors = [
-        'hsla(17, 82%, 46%, 0.5)',
-        'hsla(202, 65%, 58%, 0.5)',
-        'hsla(281, 73%, 41%, 0.5)',
-        'hsla(124, 69%, 52%, 0.5)',
-        'hsla(348, 77%, 49%, 0.5)',
-        'hsla(46, 88%, 60%, 0.5)',
-        'hsla(192, 71%, 44%, 0.5)',
-        'hsla(263, 67%, 55%, 0.5)',
-        'hsla(97, 75%, 47%, 0.5)',
-        'hsla(329, 63%, 53%, 0.5)',
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
-}
 
-const Select = () => {
-    const select = document.createElement('select');
-
-
-    return select;
-};
-
-const Button = () => {
-    const button = document.createElement('button');
-
-
-    return button;
-};
 
 
 
 // Init
 setMonthView(todayYear, todayMonth);
+UI.SetTheme('green');
 
 main.replaceChildren(calendar);
 pageWrapper.replaceChildren(header, main);
