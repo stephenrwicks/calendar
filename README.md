@@ -6,6 +6,6 @@ No libraries
 
 HTML and CSS are banned except for the bare minimum to get a script on the page
 
-All DOM nodes and styles have to be created in the script
+All DOM nodes and styles have to be created in the script. Avoid anything like HTML strings, etc
 
 DOM queries are banned (querySelector, etc.)

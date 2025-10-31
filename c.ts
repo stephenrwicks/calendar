@@ -55,7 +55,7 @@ const CONTROLLER = (() => {
         let n = 28;
         while (true) {
             d.setDate(d.getDate() + 1)
-            if (d.getDate() < n) break;
+            if (d.getDate() < n) break; // Break if we got to 1
             n++;
         }
         return n;
@@ -80,32 +80,21 @@ const CONTROLLER = (() => {
         return dates;
     };
 
+    // Map and Set are way faster than Arrays. Easily avoids nested loops
+    // Earlier in this project I was getting all events for a given date by looping through every event and checking its date range
     const EVENTMAP: Map<string, Set<ScheduledEvent>> = new Map();
 
-    const mapEventToDay = (scheduledEvent: ScheduledEvent, day: Date) => {
-        const dayString = day.toISOString().slice(0, 10); // Removes timestamp
+    const mapEventToDay = (scheduledEvent: ScheduledEvent, date: Date) => {
+        const dayString = date.toISOString().slice(0, 10); // Removes timestamp
         const eventsSet = EVENTMAP.get(dayString);
         if (eventsSet) {
             eventsSet.add(scheduledEvent);
             return;
         }
         const newEventsSet: Set<ScheduledEvent> = new Set();
-        newEventsSet.add(scheduledEvent)
+        newEventsSet.add(scheduledEvent);
         EVENTMAP.set(dayString, newEventsSet);
     };
-
-    const removeEvent = (scheduledEvent: ScheduledEvent) => {
-        const dates = getDatesInRange(scheduledEvent);
-        for (const date of dates) {
-            const dayString = date.toISOString().slice(0, 10); // Removes timestamp
-            const eventsSet = EVENTMAP.get(dayString);
-            eventsSet?.delete(scheduledEvent);
-            // mapEventToDay(scheduledEvent as ScheduledEvent, date);
-        }
-    };
-
-    //let eventId = 0; // Give every event a unique id by incrementing forever
-    // Do we care about ID if we use Map + Set? No
 
     const addEvent = (scheduledEvent: ScheduledEvent) => {
         const dates = getDatesInRange(scheduledEvent as ScheduledEvent);
@@ -115,10 +104,7 @@ const CONTROLLER = (() => {
         }
     }
 
-    const updateEvent = (scheduledEvent: ScheduledEvent, updatedData: { name: string, description: string, startTime: Date, endTime: Date }) => {
-        // This method is necessary because when times change we  potentially have to unmap and remap the event to different days
-        // So instead of directly mutating the dates, we can remove and re-add the event object, while never losing the direct reference
-        // Could also just go immutable and remove old object and add new one
+    const updateEvent = (scheduledEvent: ScheduledEvent, updatedData: Omit<ScheduledEvent, 'color'>) => {
         removeEvent(scheduledEvent);
         scheduledEvent.name = updatedData.name.trim();
         scheduledEvent.description = updatedData.description.trim();
@@ -127,33 +113,16 @@ const CONTROLLER = (() => {
         addEvent(scheduledEvent);
     };
 
-    const getEventsForDayWithMap = (day: Date) => {
-        return EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
+    const removeEvent = (scheduledEvent: ScheduledEvent) => {
+        const dates = getDatesInRange(scheduledEvent);
+        for (const date of dates) {
+            const dayString = date.toISOString().slice(0, 10); // Removes timestamp
+            const eventsSet = EVENTMAP.get(dayString);
+            eventsSet?.delete(scheduledEvent);
+        }
     };
 
-    // const EVENTS: ScheduledEvent[] = [];
-    // const upsertEvent = (scheduledEvent: ScheduledEvent) => {
-    //     if ('id' in scheduledEvent && typeof scheduledEvent.id === 'number') {
-    //         // IDs don't matter, so we can just delete
-    //         deleteEvent(scheduledEvent.id);
-    //     }
-    //     const newEvent: ScheduledEvent = { ...scheduledEvent, id: ++eventId };
-    //     EVENTS.push(newEvent);
-    // };
-    // const deleteEvent = (id: number) => {
-    //     const index = EVENTS.findIndex(event => event.id === id);
-    //     if (index === -1) throw new Error('Event not found');
-    //     EVENTS.splice(index, 1);
-    // };
-
-    // const getEventsForDay = (day: Date) => {
-    //     // Need to fix this so that nested loop isn't necessary
-    //     // Map Day => Event rather than the other way around
-    //     // When an event is added you have to map it to each day in range
-    //     return EVENTS.filter(event => {
-    //         return getDatesInRange(event).some(date => isSameDay(date, day));
-    //     });
-    // };
+    const getEventsForDay = (day: Date) => EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
 
     const getCurrentDate = (): Date => {
         return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
@@ -210,7 +179,7 @@ const CONTROLLER = (() => {
         goToPrevMonth,
         goToNextDay,
         goToPrevDay,
-        getEventsForDayWithMap,
+        getEventsForDay,
         addEvent,
         updateEvent,
         removeEvent,
@@ -309,15 +278,14 @@ const eventDialog = async (scheduledEvent?: ScheduledEvent) => {
     }
 };
 
-// This is going to be used twice because of editing
-// Maybe pointless decoupling here though
+// Maybe pointless decoupling here though. Could just put this inside dialog with no cost
 const eventForm = (scheduledEvent?: ScheduledEvent) => {
     //console.log(event);
     // Clean pattern using withResolvers and a form and exporting them separately
     const { promise, resolve } = Promise.withResolvers<Omit<ScheduledEvent, 'color'> | null>();
     const form = document.createElement('form');
-    form.style.display = 'grid';
-    form.style.gridTemplateColumns = '1fr 1fr';
+    form.style.display = 'flex';
+    form.style.flexFlow = 'column';
     form.style.gap = '1rem';
 
     const nameDiv = document.createElement('div');
@@ -336,7 +304,6 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     const descriptionLabel = document.createElement('label');
     const descriptionInput = document.createElement('textarea');
     descriptionDiv.style.display = 'grid';
-    descriptionDiv.style.gridColumn = 'span 2';
     descriptionLabel.style.width = 'min-content';
     descriptionLabel.htmlFor = 'description-input';
     descriptionLabel.textContent = 'Description';
@@ -348,8 +315,10 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     // Need a way to validate these two dates against each other without breaking the query rule.
     // Could pass up a function that fires reportValidity/setCustom etc
     // Maybe end should not even populate / show until start is filled out
-    const { datePickerEl: startDateEl, getDate: getStartTime } = datePicker('Start Time', scheduledEvent?.startTime);
-    const { datePickerEl: endDateEl, getDate: getEndTime } = datePicker('End Time', scheduledEvent?.endTime);
+    const defaultStart = CONTROLLER.getCurrentDate();
+    const defaultEnd = new Date(defaultStart.getTime() + 3600000); // One hour
+    const { datePickerEl: startDateEl, getDate: getStartTime } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
+    const { datePickerEl: endDateEl, getDate: getEndTime } = datePicker('End', scheduledEvent?.endTime ?? defaultEnd);
 
     if (scheduledEvent) {
         nameInput.value = scheduledEvent.name ?? '';
@@ -396,7 +365,7 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     };
 };
 
-const datePicker = (title: string, value: Date = CONTROLLER.getCurrentDate()) => {
+const datePicker = (title: string, value: Date) => {
     // Avoiding native date input
     const fieldset = document.createElement('fieldset');
     fieldset.style.display = 'grid';
@@ -406,34 +375,13 @@ const datePicker = (title: string, value: Date = CONTROLLER.getCurrentDate()) =>
     const legend = document.createElement('legend');
     legend.textContent = title;
 
-    const yearDiv = document.createElement('div');
     const yearSelect = document.createElement('select');
-    const yearLabel = document.createElement('label');
-    const yearId = `_${crypto.randomUUID()}`;
-    yearDiv.style.display = 'grid';
-    yearSelect.id = yearId;
-    yearLabel.htmlFor = yearId;
-    yearLabel.textContent = 'Year';
     yearSelect.required = true;
 
-    const monthDiv = document.createElement('div');
     const monthSelect = document.createElement('select');
-    const monthLabel = document.createElement('label');
-    const monthId = `_${crypto.randomUUID()}`;
-    monthDiv.style.display = 'grid';
-    monthSelect.id = monthId;
-    monthLabel.htmlFor = monthId;
-    monthLabel.textContent = 'Month';
     monthSelect.required = true;
 
-    const dayDiv = document.createElement('div');
     const daySelect = document.createElement('select');
-    const dayLabel = document.createElement('label');
-    const dayId = `_${crypto.randomUUID()}`;
-    dayDiv.style.display = 'grid';
-    daySelect.id = dayId;
-    dayLabel.htmlFor = dayId;
-    dayLabel.textContent = 'Day';
     daySelect.required = true;
 
     const timeDiv = document.createElement('div');
@@ -442,6 +390,7 @@ const datePicker = (title: string, value: Date = CONTROLLER.getCurrentDate()) =>
     const amPmSelect = document.createElement('select');
     timeDiv.style.display = 'flex';
     timeDiv.style.gap = '.5rem';
+    timeDiv.style.justifyContent = 'center';
     hourSelect.required = true;
     minuteSelect.required = true;
     amPmSelect.required = true;
@@ -455,7 +404,6 @@ const datePicker = (title: string, value: Date = CONTROLLER.getCurrentDate()) =>
     for (let d = 1; d <= CONTROLLER.getNumberOfDaysInMonth(value); d++) {
         daySelect.add(new Option(String(d), String(d)));
     }
-    // hourSelect.add(new Option('12', '12'));
     for (let h = 1; h <= 12; h++) {
         hourSelect.add(new Option(String(h), String(h)));
     }
@@ -518,17 +466,13 @@ const datePicker = (title: string, value: Date = CONTROLLER.getCurrentDate()) =>
         daySelect.value = dayState;
     });
 
-    yearDiv.replaceChildren(yearLabel, yearSelect);
-    monthDiv.replaceChildren(monthLabel, monthSelect);
-    dayDiv.replaceChildren(dayLabel, daySelect);
-    timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect)
-    fieldset.replaceChildren(legend, yearDiv, monthDiv, dayDiv, timeDiv);
 
-    const dayDiv2 = document.createElement('div');
-    dayDiv2.style.display = 'flex';
-    dayDiv2.style.gap = '.5rem';
-    dayDiv2.append(monthSelect, daySelect, yearSelect);
-    fieldset.replaceChildren(legend, dayDiv2, timeDiv);
+    timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect)
+    const dayDiv = document.createElement('div');
+    dayDiv.style.display = 'flex';
+    dayDiv.style.gap = '.5rem';
+    dayDiv.append(monthSelect, daySelect, yearSelect);
+    fieldset.replaceChildren(legend, dayDiv, timeDiv);
 
     return {
         datePickerEl: fieldset, getDate, setDate
@@ -635,7 +579,7 @@ const getDayView = (day: Date) => {
         dayGrid.append(hourDiv);
     }
 
-    for (const event of CONTROLLER.getEventsForDayWithMap(day)) {
+    for (const event of CONTROLLER.getEventsForDay(day)) {
         const eventButton = document.createElement('button');
         eventButton.style.border = 'unset';
         eventButton.style.outline = 'unset';
@@ -712,16 +656,17 @@ const getMonthView = (month: Date[]) => {
 
     const dayButtons = month.map((day, i) => {
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
-
+        const eventsForThisDay = CONTROLLER.getEventsForDay(day);
         const dayButton = document.createElement('button');
+
         dayButton.type = 'button';
-        // Leveraging different inline variable values which then get toggled by JS - This is pretty nice
+        // Leveraging different inline css variable values which then get toggled by JS - This is pretty nice
         dayButton.style.setProperty('--backgroundColor', isToday ? 'lightblue' : 'unset');
         dayButton.style.setProperty('--hoverBackgroundColor', isToday ? 'cyan' : '#fafafa');
         dayButton.style.backgroundColor = 'var(--backgroundColor)';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
-        dayButton.style.padding = '8px';
+        dayButton.style.padding = '.5rem';
         dayButton.style.outline = '1px solid #ccc';
         dayButton.addEventListener('focusin', handleDayFocusIn)
         dayButton.addEventListener('focusout', handleDayFocusOut);
@@ -730,11 +675,25 @@ const getMonthView = (month: Date[]) => {
         dayButton.addEventListener('dblclick', () => setDayView(day));
         dayButton.addEventListener('keydown', (e) => handleDayKeydown(e, i, day, dayButtons));
 
-
         if (i === 0) {
             dayButton.style.gridColumnStart = String(day.getDay() + 1);
         }
         dayButton.textContent = String(i + 1);
+        if (eventsForThisDay.size) {
+            dayButton.style.position = 'relative';
+            const num = document.createElement('div');
+            num.style.position = 'absolute';
+            num.style.top = '.3rem';
+            num.style.right = '.3rem';
+            num.style.width = '1rem';
+            num.style.height = '1rem';
+            num.style.fontSize = '.8em';
+            num.style.color = 'red';
+            num.style.outline = '1px solid red';
+            num.style.borderRadius = '50%';
+            num.textContent = String(eventsForThisDay.size);
+            dayButton.append(num);
+        }
         return dayButton;
     });
 
@@ -763,12 +722,6 @@ const setDayView = (day: Date) => {
     calendar.replaceChildren(getDayView(day));
 };
 
-// Init
-setMonthView(todayYear, todayMonth);
-
-main.replaceChildren(calendar);
-pageWrapper.replaceChildren(header, main);
-body.replaceChildren(pageWrapper);
 
 (async () => {
     while (true) {
@@ -804,9 +757,25 @@ const getRandomColor = () => {
     return colors[Math.floor(Math.random() * colors.length)];
 }
 
-const styledSelectElement = () => {
+const Select = () => {
     const select = document.createElement('select');
 
 
     return select;
 };
+
+const Button = () => {
+    const button = document.createElement('button');
+
+
+    return button;
+};
+
+
+
+// Init
+setMonthView(todayYear, todayMonth);
+
+main.replaceChildren(calendar);
+pageWrapper.replaceChildren(header, main);
+body.replaceChildren(pageWrapper);

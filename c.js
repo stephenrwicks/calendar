@@ -56,8 +56,8 @@ const CONTROLLER = (() => {
         return dates;
     };
     const EVENTMAP = new Map();
-    const mapEventToDay = (scheduledEvent, day) => {
-        const dayString = day.toISOString().slice(0, 10);
+    const mapEventToDay = (scheduledEvent, date) => {
+        const dayString = date.toISOString().slice(0, 10);
         const eventsSet = EVENTMAP.get(dayString);
         if (eventsSet) {
             eventsSet.add(scheduledEvent);
@@ -66,14 +66,6 @@ const CONTROLLER = (() => {
         const newEventsSet = new Set();
         newEventsSet.add(scheduledEvent);
         EVENTMAP.set(dayString, newEventsSet);
-    };
-    const removeEvent = (scheduledEvent) => {
-        const dates = getDatesInRange(scheduledEvent);
-        for (const date of dates) {
-            const dayString = date.toISOString().slice(0, 10);
-            const eventsSet = EVENTMAP.get(dayString);
-            eventsSet?.delete(scheduledEvent);
-        }
     };
     const addEvent = (scheduledEvent) => {
         const dates = getDatesInRange(scheduledEvent);
@@ -90,9 +82,15 @@ const CONTROLLER = (() => {
         scheduledEvent.endTime = updatedData.endTime;
         addEvent(scheduledEvent);
     };
-    const getEventsForDayWithMap = (day) => {
-        return EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
+    const removeEvent = (scheduledEvent) => {
+        const dates = getDatesInRange(scheduledEvent);
+        for (const date of dates) {
+            const dayString = date.toISOString().slice(0, 10);
+            const eventsSet = EVENTMAP.get(dayString);
+            eventsSet?.delete(scheduledEvent);
+        }
     };
+    const getEventsForDay = (day) => EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
     const getCurrentDate = () => {
         return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
     };
@@ -144,7 +142,7 @@ const CONTROLLER = (() => {
         goToPrevMonth,
         goToNextDay,
         goToPrevDay,
-        getEventsForDayWithMap,
+        getEventsForDay,
         addEvent,
         updateEvent,
         removeEvent,
@@ -231,8 +229,8 @@ const eventDialog = async (scheduledEvent) => {
 const eventForm = (scheduledEvent) => {
     const { promise, resolve } = Promise.withResolvers();
     const form = document.createElement('form');
-    form.style.display = 'grid';
-    form.style.gridTemplateColumns = '1fr 1fr';
+    form.style.display = 'flex';
+    form.style.flexFlow = 'column';
     form.style.gap = '1rem';
     const nameDiv = document.createElement('div');
     const nameLabel = document.createElement('label');
@@ -250,7 +248,6 @@ const eventForm = (scheduledEvent) => {
     const descriptionLabel = document.createElement('label');
     const descriptionInput = document.createElement('textarea');
     descriptionDiv.style.display = 'grid';
-    descriptionDiv.style.gridColumn = 'span 2';
     descriptionLabel.style.width = 'min-content';
     descriptionLabel.htmlFor = 'description-input';
     descriptionLabel.textContent = 'Description';
@@ -258,8 +255,10 @@ const eventForm = (scheduledEvent) => {
     descriptionInput.maxLength = 500;
     descriptionInput.style.resize = 'none';
     descriptionInput.style.height = '4rem';
-    const { datePickerEl: startDateEl, getDate: getStartTime } = datePicker('Start Time', scheduledEvent?.startTime);
-    const { datePickerEl: endDateEl, getDate: getEndTime } = datePicker('End Time', scheduledEvent?.endTime);
+    const defaultStart = CONTROLLER.getCurrentDate();
+    const defaultEnd = new Date(defaultStart.getTime() + 3600000);
+    const { datePickerEl: startDateEl, getDate: getStartTime } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
+    const { datePickerEl: endDateEl, getDate: getEndTime } = datePicker('End', scheduledEvent?.endTime ?? defaultEnd);
     if (scheduledEvent) {
         nameInput.value = scheduledEvent.name ?? '';
         descriptionInput.value = scheduledEvent.description ?? '';
@@ -295,39 +294,18 @@ const eventForm = (scheduledEvent) => {
         getResult: promise
     };
 };
-const datePicker = (title, value = CONTROLLER.getCurrentDate()) => {
+const datePicker = (title, value) => {
     const fieldset = document.createElement('fieldset');
     fieldset.style.display = 'grid';
     fieldset.style.margin = '0px';
     fieldset.style.gap = '1rem';
     const legend = document.createElement('legend');
     legend.textContent = title;
-    const yearDiv = document.createElement('div');
     const yearSelect = document.createElement('select');
-    const yearLabel = document.createElement('label');
-    const yearId = `_${crypto.randomUUID()}`;
-    yearDiv.style.display = 'grid';
-    yearSelect.id = yearId;
-    yearLabel.htmlFor = yearId;
-    yearLabel.textContent = 'Year';
     yearSelect.required = true;
-    const monthDiv = document.createElement('div');
     const monthSelect = document.createElement('select');
-    const monthLabel = document.createElement('label');
-    const monthId = `_${crypto.randomUUID()}`;
-    monthDiv.style.display = 'grid';
-    monthSelect.id = monthId;
-    monthLabel.htmlFor = monthId;
-    monthLabel.textContent = 'Month';
     monthSelect.required = true;
-    const dayDiv = document.createElement('div');
     const daySelect = document.createElement('select');
-    const dayLabel = document.createElement('label');
-    const dayId = `_${crypto.randomUUID()}`;
-    dayDiv.style.display = 'grid';
-    daySelect.id = dayId;
-    dayLabel.htmlFor = dayId;
-    dayLabel.textContent = 'Day';
     daySelect.required = true;
     const timeDiv = document.createElement('div');
     const hourSelect = document.createElement('select');
@@ -335,6 +313,7 @@ const datePicker = (title, value = CONTROLLER.getCurrentDate()) => {
     const amPmSelect = document.createElement('select');
     timeDiv.style.display = 'flex';
     timeDiv.style.gap = '.5rem';
+    timeDiv.style.justifyContent = 'center';
     hourSelect.required = true;
     minuteSelect.required = true;
     amPmSelect.required = true;
@@ -397,16 +376,12 @@ const datePicker = (title, value = CONTROLLER.getCurrentDate()) => {
         }
         daySelect.value = dayState;
     });
-    yearDiv.replaceChildren(yearLabel, yearSelect);
-    monthDiv.replaceChildren(monthLabel, monthSelect);
-    dayDiv.replaceChildren(dayLabel, daySelect);
     timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect);
-    fieldset.replaceChildren(legend, yearDiv, monthDiv, dayDiv, timeDiv);
-    const dayDiv2 = document.createElement('div');
-    dayDiv2.style.display = 'flex';
-    dayDiv2.style.gap = '.5rem';
-    dayDiv2.append(monthSelect, daySelect, yearSelect);
-    fieldset.replaceChildren(legend, dayDiv2, timeDiv);
+    const dayDiv = document.createElement('div');
+    dayDiv.style.display = 'flex';
+    dayDiv.style.gap = '.5rem';
+    dayDiv.append(monthSelect, daySelect, yearSelect);
+    fieldset.replaceChildren(legend, dayDiv, timeDiv);
     return {
         datePickerEl: fieldset, getDate, setDate
     };
@@ -496,7 +471,7 @@ const getDayView = (day) => {
         hourDiv.style.pointerEvents = 'none';
         dayGrid.append(hourDiv);
     }
-    for (const event of CONTROLLER.getEventsForDayWithMap(day)) {
+    for (const event of CONTROLLER.getEventsForDay(day)) {
         const eventButton = document.createElement('button');
         eventButton.style.border = 'unset';
         eventButton.style.outline = 'unset';
@@ -558,6 +533,7 @@ const getMonthView = (month) => {
     }));
     const dayButtons = month.map((day, i) => {
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
+        const eventsForThisDay = CONTROLLER.getEventsForDay(day);
         const dayButton = document.createElement('button');
         dayButton.type = 'button';
         dayButton.style.setProperty('--backgroundColor', isToday ? 'lightblue' : 'unset');
@@ -565,7 +541,7 @@ const getMonthView = (month) => {
         dayButton.style.backgroundColor = 'var(--backgroundColor)';
         dayButton.style.border = 'unset';
         dayButton.style.borderRadius = '0px';
-        dayButton.style.padding = '8px';
+        dayButton.style.padding = '.5rem';
         dayButton.style.outline = '1px solid #ccc';
         dayButton.addEventListener('focusin', handleDayFocusIn);
         dayButton.addEventListener('focusout', handleDayFocusOut);
@@ -577,6 +553,21 @@ const getMonthView = (month) => {
             dayButton.style.gridColumnStart = String(day.getDay() + 1);
         }
         dayButton.textContent = String(i + 1);
+        if (eventsForThisDay.size) {
+            dayButton.style.position = 'relative';
+            const num = document.createElement('div');
+            num.style.fontSize = '.8em';
+            num.style.color = 'red';
+            num.style.outline = '1px solid red';
+            num.style.borderRadius = '50%';
+            num.style.position = 'absolute';
+            num.style.width = '1rem';
+            num.style.height = '1rem';
+            num.style.top = '.3rem';
+            num.style.right = '.3rem';
+            num.textContent = String(eventsForThisDay.size);
+            dayButton.append(num);
+        }
         return dayButton;
     });
     topDiv.append(dateHeader, monthNavigationButtonDiv);
@@ -600,10 +591,6 @@ const setDayView = (day) => {
     CONTROLLER.setCurrentDate(day);
     calendar.replaceChildren(getDayView(day));
 };
-setMonthView(todayYear, todayMonth);
-main.replaceChildren(calendar);
-pageWrapper.replaceChildren(header, main);
-body.replaceChildren(pageWrapper);
 (async () => {
     while (true) {
         LIVETIME = new Date();
@@ -637,7 +624,15 @@ const getRandomColor = () => {
     ];
     return colors[Math.floor(Math.random() * colors.length)];
 };
-const styledSelectElement = () => {
+const Select = () => {
     const select = document.createElement('select');
     return select;
 };
+const Button = () => {
+    const button = document.createElement('button');
+    return button;
+};
+setMonthView(todayYear, todayMonth);
+main.replaceChildren(calendar);
+pageWrapper.replaceChildren(header, main);
+body.replaceChildren(pageWrapper);
