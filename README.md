@@ -1,3 +1,5 @@
+Building something cool with a kind of "constrained writing" to make things interesting
+
 Working calendar where you can schedule events, etc., like in google calendar or microsoft teams, etc. built in a script only
 
 Rules:
