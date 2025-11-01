@@ -211,23 +211,22 @@ const CONTROLLER = (() => {
 
 const THEMES = {
     mint: (() => {
+        const font = 'Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif';
         const primaryColor = 'green';
         const secondaryColor = 'mintcream';
-
         const darkAccentColor = 'hsla(180, 100%, 25%, 1)';
         const lightAccentColor = 'hsla(180, 100%, 25%, .7)';
-
         const gray = '#ccc';
         const lightGray = '#eee';
         const border = `1px solid ${primaryColor}`;
         const boxShadow = `0px 1px 8px ${gray}`;
         const insetBoxShadow = `0px 0px 1px 2px inset ${darkAccentColor}`;
         const dropShadow = `drop-shadow(0px 0px 2px ${darkAccentColor})`;
-        const borderRadius = '0px';
-
+        const borderRadius = '.1rem';
         const black = 'black';
         const white = 'white';
         return {
+            font,
             black,
             white,
             primaryColor,
@@ -244,26 +243,23 @@ const THEMES = {
         };
     })(),
     blue: (() => {
+        const font = 'Georgia, Cambria, "Times New Roman", Times, serif';
         const black = 'hsl(220, 20%, 10%)';
         const white = 'hsl(220, 30%, 97%)';
-
         const primaryColor = 'royalblue';
         const secondaryColor = 'aliceblue';
-
         const darkAccentColor = 'hsla(220, 100%, 30%, 1)';
         const lightAccentColor = 'hsla(220, 100%, 30%, .7)';
-
         const gray = '#c8c8c8';
         const lightGray = '#e8e8e8';
-
         const border = `1px solid ${primaryColor}`;
         const boxShadow = `0px 1px 8px ${gray}`;
-
         const insetBoxShadow = `0px 0px 1px 2px inset ${darkAccentColor}`;
         const dropShadow = `drop-shadow(0px 0px 2px ${darkAccentColor})`;
-        const borderRadius = '.2rem';
+        const borderRadius = '0px';
 
         return {
+            font,
             black,
             white,
             primaryColor,
@@ -319,6 +315,7 @@ const UI = {
         button.style.padding = '.4rem';
         // button.style.margin = '.4rem';
         button.style.outline = '0px';
+        button.style.fontFamily = 'inherit';
         button.style.border = 'var(--border)';
         button.style.borderRadius = 'var(--borderRadius)';
         button.style.backgroundColor = 'var(--secondaryColor)';
@@ -343,6 +340,7 @@ const UI = {
         input.style.display = 'block';
         input.style.padding = '.5em';
         input.style.outline = '0px';
+        input.style.fontFamily = 'inherit';
         input.style.backgroundColor = 'var(--white)';
         input.style.color = 'var(--black)';
         input.style.border = 'var(--border)';
@@ -358,6 +356,7 @@ const UI = {
         input.style.resize = 'none';
         input.maxLength = 500;
         input.style.padding = '.5em';
+        input.style.fontFamily = 'inherit';
         input.style.backgroundColor = 'var(--white)';
         input.style.color = 'var(--black)';
         input.style.outline = '0px';
@@ -374,12 +373,21 @@ const UI = {
         const select = document.createElement('select');
         select.style.display = 'block';
         select.style.padding = '.5em';
+        select.style.fontFamily = 'inherit';
         select.style.borderRadius = 'var(--borderRadius)';
         select.style.cursor = 'pointer';
         select.style.outline = '0px';
         select.style.border = 'var(--border)';
         select.style.borderRadius = 'var(--borderRadius)';
         select.style.backgroundColor = 'var(--secondaryColor)';
+        select.style.color = 'var(--black)';
+        select.style.transition = 'background-color .2s, box-shadow .2s';
+
+        select.addEventListener('focusin', () => select.style.filter = 'var(--dropShadow)');
+        select.addEventListener('focusout', () => select.style.filter = '');
+        select.addEventListener('blur', () => select.style.filter = '');
+        select.addEventListener('pointerenter', () => select.style.boxShadow = 'var(--boxShadow)');
+        select.addEventListener('pointerleave', () => select.style.boxShadow = '');
 
         return select;
     },
@@ -682,7 +690,8 @@ goBackToMonthButton.addEventListener('click', () => {
 });
 
 const calendar = document.createElement('section');
-calendar.style.fontFamily = 'Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif';
+calendar.style.fontFamily = 'var(--font)';
+
 
 const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = 'var(--insetBoxShadow)';
 const handleDayFocusOut = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '';
@@ -754,7 +763,7 @@ const getDayView = (day: Date) => {
     dayGrid.style.gridTemplateColumns = 'repeat(96, 1fr)';
     dayGrid.style.minHeight = '12rem';
     dayGrid.style.padding = '.2rem';
-    dayGrid.style.outline = '1px solid #ccc';
+    dayGrid.style.outline = 'var(--border)';
 
     let gridColumnStart = 1;
     for (const time of ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM']) {
@@ -856,7 +865,7 @@ const getMonthView = (month: Date[]) => {
         dayButton.style.borderRadius = '0px';
         dayButton.style.cursor = 'pointer';
         dayButton.style.padding = '.5rem';
-        dayButton.style.outline = '1px solid #ccc';
+        dayButton.style.outline = 'var(--border)';
         dayButton.addEventListener('focusin', (e) => {
             handleDayFocusIn(e);
             CONTROLLER.setCurrentDate(day)
