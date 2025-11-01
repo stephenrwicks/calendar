@@ -13,6 +13,15 @@ const CONTROLLER = (() => {
     let _currentYear = todayYear;
     let _currentMonth = todayMonth;
     let _currentDay = todayDay;
+    const isSameDay = (a, b) => {
+        if (a.getDate() !== b.getDate())
+            return false;
+        if (a.getMonth() !== b.getMonth())
+            return false;
+        if (a.getFullYear() !== b.getFullYear())
+            return false;
+        return true;
+    };
     const getMonth = (year, month) => {
         const days = [];
         const m = month - 1;
@@ -137,6 +146,7 @@ const CONTROLLER = (() => {
         return new Date(current);
     };
     return {
+        isSameDay,
         setCurrentDate,
         getCurrentDate,
         getMonth,
@@ -658,8 +668,8 @@ const getDayView = (day) => {
 };
 const getTimeAs15MinuteIncrement = (d) => Math.floor(d.getHours() * 4) + Math.floor(d.getMinutes() / 15) + 1;
 const getGridColumnForEvent = (currentDay, event) => {
-    const isStartToday = isSameDay(event.startTime, currentDay);
-    const isEndToday = isSameDay(event.endTime, currentDay);
+    const isStartToday = CONTROLLER.isSameDay(event.startTime, currentDay);
+    const isEndToday = CONTROLLER.isSameDay(event.endTime, currentDay);
     if (!isStartToday && !isEndToday)
         return '1 / -1';
     if (isStartToday && !isEndToday)
@@ -768,15 +778,6 @@ const setDayView = (day) => {
     currentView = 'day';
     CONTROLLER.setCurrentDate(day);
     calendar.replaceChildren(getDayView(day), footerSection);
-};
-const isSameDay = (a, b) => {
-    if (a.getDate() !== b.getDate())
-        return false;
-    if (a.getMonth() !== b.getMonth())
-        return false;
-    if (a.getFullYear() !== b.getFullYear())
-        return false;
-    return true;
 };
 setMonthView(todayYear, todayMonth);
 main.replaceChildren(calendar);

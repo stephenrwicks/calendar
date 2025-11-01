@@ -54,6 +54,13 @@ const CONTROLLER = (() => {
     let _currentMonth = todayMonth;
     let _currentDay = todayDay;
 
+    const isSameDay = (a: Date, b: Date) => {
+        if (a.getDate() !== b.getDate()) return false;
+        if (a.getMonth() !== b.getMonth()) return false;
+        if (a.getFullYear() !== b.getFullYear()) return false;
+        return true;
+    };
+
     const getMonth = (year: Year, month: Month): Date[] => {
         const days = [];
         const m = month - 1;
@@ -191,6 +198,7 @@ const CONTROLLER = (() => {
 
     // API
     return {
+        isSameDay,
         setCurrentDate,
         getCurrentDate,
         getMonth,
@@ -810,8 +818,8 @@ const getDayView = (day: Date) => {
 const getTimeAs15MinuteIncrement = (d: Date) => Math.floor(d.getHours() * 4) + Math.floor(d.getMinutes() / 15) + 1;
 const getGridColumnForEvent = (currentDay: Date, event: ScheduledEvent): string => {
     // Event is assumed to be occuring on currentDay if we got here
-    const isStartToday = isSameDay(event.startTime, currentDay);
-    const isEndToday = isSameDay(event.endTime, currentDay);
+    const isStartToday = CONTROLLER.isSameDay(event.startTime, currentDay);
+    const isEndToday = CONTROLLER.isSameDay(event.endTime, currentDay);
     if (!isStartToday && !isEndToday) return '1 / -1';
     if (isStartToday && !isEndToday) return `${getTimeAs15MinuteIncrement(event.startTime)} / -1`;
     if (!isStartToday && isEndToday) return `1 / ${getTimeAs15MinuteIncrement(event.endTime)}`;
@@ -938,14 +946,6 @@ const setDayView = (day: Date) => {
     calendar.replaceChildren(getDayView(day), footerSection);
 };
 
-
-
-const isSameDay = (a: Date, b: Date) => {
-    if (a.getDate() !== b.getDate()) return false;
-    if (a.getMonth() !== b.getMonth()) return false;
-    if (a.getFullYear() !== b.getFullYear()) return false;
-    return true;
-}
 
 
 
