@@ -18,6 +18,22 @@ type ScheduledEvent = {
     color?: string;
 }
 
+
+type Theme = {
+    primaryColor: string;
+    secondaryColor: string;
+    darkAccentColor: string;
+    lightAccentColor: string;
+    black: string;
+    white: string;
+    gray: string;
+    lightGray: string;
+    border: string;
+    boxShadow: string;
+    insetBoxShadow: string;
+    dropShadow: string;
+}
+
 // It would have been fun to use the new Temporal API for this project but it's not widely available yet ~October 2025
 
 let LIVETIME: Date;
@@ -191,100 +207,93 @@ const CONTROLLER = (() => {
 
 })();
 
-type Theme = {
-    primaryColor: string;
-    secondaryColor: string;
-    darkAccentColor: string;
-    lightAccentColor: string;
-    black: string;
-    white: string;
-    gray: string;
-    lightGray: string;
-    border: string;
-    boxShadow: string;
-    insetBoxShadow: string;
-    dropShadow: string;
-}
 
-const Themes: Record<string, Theme> = {
-    GreenTheme: (() => {
+
+const THEMES = {
+    mint: (() => {
         const primaryColor = 'green';
         const secondaryColor = 'mintcream';
+
         const darkAccentColor = 'hsla(180, 100%, 25%, 1)';
         const lightAccentColor = 'hsla(180, 100%, 25%, .7)';
+
         const gray = '#ccc';
         const lightGray = '#eee';
         const border = `1px solid ${primaryColor}`;
         const boxShadow = `0px 1px 8px ${gray}`;
         const insetBoxShadow = `0px 0px 1px 2px inset ${darkAccentColor}`;
         const dropShadow = `drop-shadow(0px 0px 2px ${darkAccentColor})`;
+        const borderRadius = '0px';
+
         const black = 'black';
         const white = 'white';
-        return { black, white, primaryColor, darkAccentColor, lightAccentColor, secondaryColor, lightGray, gray, boxShadow, border, insetBoxShadow, dropShadow };
+        return {
+            black,
+            white,
+            primaryColor,
+            darkAccentColor,
+            lightAccentColor,
+            secondaryColor,
+            lightGray,
+            gray,
+            border,
+            borderRadius,
+            boxShadow,
+            insetBoxShadow,
+            dropShadow,
+        };
     })(),
-};
+    blue: (() => {
+        const black = 'hsl(220, 20%, 10%)';
+        const white = 'hsl(220, 30%, 97%)';
+
+        const primaryColor = 'royalblue';
+        const secondaryColor = 'aliceblue';
+
+        const darkAccentColor = 'hsla(220, 100%, 30%, 1)';
+        const lightAccentColor = 'hsla(220, 100%, 30%, .7)';
+
+        const gray = '#c8c8c8';
+        const lightGray = '#e8e8e8';
+
+        const border = `1px solid ${primaryColor}`;
+        const boxShadow = `0px 1px 8px ${gray}`;
+
+        const insetBoxShadow = `0px 0px 1px 2px inset ${darkAccentColor}`;
+        const dropShadow = `drop-shadow(0px 0px 2px ${darkAccentColor})`;
+        const borderRadius = '.2rem';
+
+        return {
+            black,
+            white,
+            primaryColor,
+            darkAccentColor,
+            lightAccentColor,
+            secondaryColor,
+            lightGray,
+            gray,
+            border,
+            borderRadius,
+            boxShadow,
+            insetBoxShadow,
+            dropShadow,
+        };
+    })(),
+} as const;
 
 
 const UI = {
-    SetTheme(theme: 'green' | 'blue') {
-        let chosenTheme = Themes.GreenTheme;
-        if (theme === 'blue') {
-            // chosenTheme = BlueTheme;
-        }
-        // Inject CSS properties into parent. Should rerender colors automatically
-        for (const [key, value] of Object.entries(chosenTheme)) {
+    setTheme(theme: keyof typeof THEMES = 'mint') {
+        // Inject CSS properties into parent.
+        // This is a cool pattern. We are basically creating a stylesheet.
+        // But deeper levels of the DOM could override by injecting a different theme.
+        // Child elements consume CSS variables which allows the theme to change natively
+        for (const [key, value] of Object.entries(THEMES[theme])) {
             calendar.style.setProperty(`--${key}`, value)
         }
     },
-    Button(type: 'button' | 'submit' = 'button') {
-        const button = document.createElement('button');
-        button.type = type;
-        button.style.display = 'grid';
-        button.style.placeItems = 'center';
-        button.style.textAlign = 'center';
-        button.style.textWrap = 'balance';
-        button.style.userSelect = 'none';
-        button.style.cursor = 'pointer';
-        button.style.padding = '.4rem';
-        button.style.margin = '.4rem';
-        button.style.outline = '0px';
-        button.style.border = 'var(--border)';
-        button.style.borderRadius = '.2rem';
-        button.style.backgroundColor = 'var(--secondaryColor)';
-        button.style.color = 'var(--black)';
-        // hover, focus
-        button.addEventListener('focusin', () => button.style.filter = 'var(--dropShadow)');
-        button.addEventListener('focusout', () => button.style.filter = 'unset');
-        button.addEventListener('blur', () => button.style.filter = 'unset');
-        button.addEventListener('pointerenter', () => button.style.boxShadow = 'var(--boxShadow)');
-        button.addEventListener('pointerleave', () => button.style.boxShadow = '');
-
-        return button;
-    },
-    Textbox() {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.style.padding = '.5em';
-        input.style.margin = '.5em';
-        input.style.backgroundColor = 'var(--white)';
-        input.style.color = 'var(--black)';
-        input.style.borderRadius = '.2rem';
-
-
-        return input;
-    },
-    Select() {
-        const select = document.createElement('select');
-
-
-        return select;
-    },
-    Dialog() {
-        const dialog = document.createElement('dialog');
-        return dialog;
-    },
     getRandomColor() {
-        const colors = [
+        const c = [
             'hsla(17, 82%, 46%, 0.5)',
             'hsla(202, 65%, 58%, 0.5)',
             'hsla(281, 73%, 41%, 0.5)',
@@ -296,8 +305,93 @@ const UI = {
             'hsla(97, 75%, 47%, 0.5)',
             'hsla(329, 63%, 53%, 0.5)',
         ];
-        return colors[Math.floor(Math.random() * colors.length)];
+        return c[Math.floor(Math.random() * c.length)];
     },
+    Button(type: 'button' | 'submit' = 'button') {
+        const button = document.createElement('button');
+        button.type = type;
+        button.style.display = 'grid';
+        button.style.placeItems = 'center';
+        button.style.textAlign = 'center';
+        button.style.textWrap = 'balance';
+        button.style.userSelect = 'none';
+        button.style.cursor = 'pointer';
+        button.style.padding = '.4rem';
+        // button.style.margin = '.4rem';
+        button.style.outline = '0px';
+        button.style.border = 'var(--border)';
+        button.style.borderRadius = 'var(--borderRadius)';
+        button.style.backgroundColor = 'var(--secondaryColor)';
+        button.style.color = 'var(--black)';
+        button.style.transition = 'background-color .2s, box-shadow .2s';
+        // hover, focus
+        button.addEventListener('focusin', () => button.style.filter = 'var(--dropShadow)');
+        button.addEventListener('focusout', () => button.style.filter = '');
+        button.addEventListener('blur', () => button.style.filter = '');
+        button.addEventListener('pointerenter', () => button.style.boxShadow = 'var(--boxShadow)');
+        button.addEventListener('pointerleave', () => button.style.boxShadow = '');
+
+        return button;
+    },
+    Label() {
+
+    },
+    Textbox() {
+        const input = document.createElement('input')
+        input.type = 'text';
+        input.maxLength = 40;
+        input.style.display = 'block';
+        input.style.padding = '.5em';
+        input.style.outline = '0px';
+        input.style.backgroundColor = 'var(--white)';
+        input.style.color = 'var(--black)';
+        input.style.border = 'var(--border)';
+        input.style.borderRadius = 'var(--borderRadius)';
+        input.addEventListener('focusin', () => input.style.backgroundColor = 'var(--secondaryColor)');
+        input.addEventListener('focusout', () => input.style.backgroundColor = 'var(--white)');
+
+        return input;
+    },
+    Textarea() {
+        const input = document.createElement('textarea');
+        input.style.display = 'block';
+        input.style.resize = 'none';
+        input.maxLength = 500;
+        input.style.padding = '.5em';
+        input.style.backgroundColor = 'var(--white)';
+        input.style.color = 'var(--black)';
+        input.style.outline = '0px';
+        input.style.border = 'var(--border)';
+        input.style.borderRadius = 'var(--borderRadius)';
+        input.style.height = '4rem';
+
+        input.addEventListener('focusin', () => input.style.backgroundColor = 'var(--secondaryColor)');
+        input.addEventListener('focusout', () => input.style.backgroundColor = 'var(--white)');
+
+        return input;
+    },
+    Select() {
+        const select = document.createElement('select');
+        select.style.display = 'block';
+        select.style.padding = '.5em';
+        select.style.borderRadius = 'var(--borderRadius)';
+        select.style.cursor = 'pointer';
+        select.style.outline = '0px';
+        select.style.border = 'var(--border)';
+        select.style.borderRadius = 'var(--borderRadius)';
+        select.style.backgroundColor = 'var(--secondaryColor)';
+
+        return select;
+    },
+    Dialog(color: string) {
+        const dialog = document.createElement('dialog');
+        dialog.style.borderColor = color;
+        dialog.style.boxShadow = '0px 0px 10px 5px var(--gray)';
+        dialog.style.padding = '1rem';
+        dialog.addEventListener('cancel', dialog.remove);
+        return dialog;
+    },
+
 };
 
 
@@ -307,22 +401,13 @@ body.style.height = '100vh';
 body.style.paddingTop = '10vh';
 
 const pageWrapper = document.createElement('div');
-pageWrapper.style.fontFamily = 'Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif';
-
-const title = document.createElement('title');
-document.head.append(title);
-
-const header = document.createElement('header');
-const h1 = document.createElement('h1');
-header.replaceChildren(h1);
 
 const main = document.createElement('main');
-
-const section = document.createElement('section');
 main.style.display = 'flex';
 main.style.flexDirection = 'column';
 main.style.alignItems = 'center';
-main.style.paddingBottom = '5rem';
+
+
 
 // These don't need to be recreated
 const monthNavigationButtonDiv = document.createElement('div');
@@ -365,9 +450,7 @@ addEventButton.textContent = 'Add Event';
 addEventButton.addEventListener('click', () => eventDialog());
 
 const eventDialog = async (scheduledEvent?: ScheduledEvent) => {
-    const dialog = UI.Dialog();
-    dialog.style.borderColor = scheduledEvent?.color ?? '#ccc';
-    dialog.addEventListener('cancel', () => dialog.remove());
+    const dialog = UI.Dialog(scheduledEvent?.color ?? '#ccc');
     calendar.append(dialog);
     const { form, getResult } = eventForm(scheduledEvent);
     dialog.append(form);
@@ -405,19 +488,16 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     nameLabel.textContent = 'Name';
     nameInput.id = 'name-input';
     nameInput.required = true;
-    nameInput.maxLength = 40;
     nameInput.pattern = '\\S.*';
     const descriptionDiv = document.createElement('div');
     const descriptionLabel = document.createElement('label');
-    const descriptionInput = document.createElement('textarea');
+    const descriptionInput = UI.Textarea();
     descriptionDiv.style.display = 'grid';
     descriptionLabel.style.width = 'min-content';
     descriptionLabel.htmlFor = 'description-input';
     descriptionLabel.textContent = 'Description';
     descriptionInput.id = 'description-input';
-    descriptionInput.maxLength = 500;
-    descriptionInput.style.resize = 'none';
-    descriptionInput.style.height = '4rem';
+
 
     // Need a way to validate these two dates against each other without breaking the query rule.
     // Could pass up a function that fires reportValidity/setCustom etc
@@ -595,7 +675,6 @@ const datePicker = (title: string, value: Date) => {
 
 
 const goBackToMonthButton = UI.Button();
-goBackToMonthButton.type = 'button';
 goBackToMonthButton.textContent = 'Back';
 goBackToMonthButton.addEventListener('click', () => {
     const date = CONTROLLER.getCurrentDate();
@@ -603,6 +682,7 @@ goBackToMonthButton.addEventListener('click', () => {
 });
 
 const calendar = document.createElement('section');
+calendar.style.fontFamily = 'Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif';
 
 const handleDayFocusIn = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = 'var(--insetBoxShadow)';
 const handleDayFocusOut = (e: Event) => (e.target as HTMLButtonElement).style.boxShadow = '';
@@ -656,7 +736,7 @@ const handleDayKeydown = (e: KeyboardEvent, i: number, day: Date, dayButtons: HT
 
 const getDayView = (day: Date) => {
     const wrapper = document.createElement('div');
-    wrapper.style.width = '700px';
+    wrapper.style.width = 'min(700px, 100vw)';
 
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
@@ -733,7 +813,7 @@ const getGridColumnForEvent = (currentDay: Date, event: ScheduledEvent): string 
 const getMonthView = (month: Date[]) => {
 
     const wrapper = document.createElement('div');
-    wrapper.style.width = '700px';
+    wrapper.style.width = 'min(700px, 100vw)';
 
     const y = month[0].getFullYear();
     const m = month[0].getMonth();
@@ -819,12 +899,20 @@ const getMonthView = (month: Date[]) => {
     };
 };
 
+const themeSelect = UI.Select();
+for (const key in THEMES) {
+    themeSelect.add(new Option(key, key, false))
+}
+themeSelect.addEventListener('change', () => UI.setTheme(themeSelect.value as keyof typeof THEMES ?? 'mint'));
+UI.setTheme();
+
+
 const footerSection = document.createElement('div');
 footerSection.style.display = 'flex';
-footerSection.style.justifyContent = 'end';
+footerSection.style.justifyContent = 'space-evenly';
 footerSection.style.height = 'max(3rem, fit-content)';
 footerSection.style.marginTop = '3rem';
-footerSection.append(addEventButton);
+footerSection.append(addEventButton, themeSelect);
 
 const setMonthView = (year: Year, month: Month, focusIndex?: number) => {
     currentView = 'month';
@@ -842,16 +930,6 @@ const setDayView = (day: Date) => {
 };
 
 
-(async () => {
-    while (true) {
-        // This should update some "live date" marker on the calendar every second
-        LIVETIME = new Date();
-        const dateTime = `${LIVETIME.toLocaleString()}`;
-        title.textContent = dateTime;
-        h1.textContent = dateTime; // This is super basic but we can run it through a function to look cool
-        await new Promise(r => setTimeout(r, 1000));
-    }
-})();
 
 const isSameDay = (a: Date, b: Date) => {
     if (a.getDate() !== b.getDate()) return false;
@@ -863,11 +941,10 @@ const isSameDay = (a: Date, b: Date) => {
 
 
 
-
 // Init
 setMonthView(todayYear, todayMonth);
-UI.SetTheme('green');
+
 
 main.replaceChildren(calendar);
-pageWrapper.replaceChildren(header, main);
-body.replaceChildren(pageWrapper);
+
+body.replaceChildren(main);
