@@ -10,7 +10,7 @@ All DOM nodes and styles have to be created in the script. Avoid anything like H
 
 DOM queries are banned (querySelector, etc.)
 
-No libraries
+No libraries (React, Vue etc) obviously
 
 I'm still creating HTML and styling stuff, it just has to be done in TS/JS
 
@@ -42,5 +42,7 @@ At first I stored all scheduled events in an array, and then for any given date 
 
 I used CSS color-mix() for the first time which was not hard to figure out and seems useful.
 
-In CSS the native dialog element has a ::backdrop pseudo-element. I can't use that without regular CSS. But it's super easy to replicate with a giant box-shadow with no blur or offset (only spread, the 4th value). Assign a color with .5 alpha value and it's translucent.
+In CSS the native dialog element has a ::backdrop pseudo-element. I can't use that without regular CSS. But it's super easy to replicate with a giant box-shadow with no blur or offset (only spread, the 4th value). Assign a color with .5 alpha value and it's translucent. I used max(100vw, 100vh) to make the shadow take up the whole screen but I found out there is also 100vmax.
+
+Having the Enter key on a button open the native dialog element that uses a form with a submit button can be a pitfall because it can focus-trap the form and immediately submit it, which makes the form invisible (and appear to not work at all) if the form was valid with its prepopulated values. But e.preventDefault() fixes this.
 
