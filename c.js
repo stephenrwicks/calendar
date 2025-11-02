@@ -69,6 +69,7 @@ const CONTROLLER = (() => {
     const EVENTMAP = new Map();
     const mapEventToDay = (scheduledEvent, date) => {
         const dayString = date.toISOString().slice(0, 10);
+        console.log(dayString);
         const eventsSet = EVENTMAP.get(dayString);
         if (eventsSet) {
             eventsSet.add(scheduledEvent);
@@ -102,9 +103,7 @@ const CONTROLLER = (() => {
         }
     };
     const getEventsForDay = (day) => EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
-    const getCurrentDate = () => {
-        return new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
-    };
+    const getCurrentDate = () => new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
     const setCurrentDate = (date) => {
         const year = date.getFullYear();
         const month = (date.getMonth() + 1);
@@ -230,7 +229,7 @@ const THEMES = {
 const UI = {
     setTheme(theme = 'mint') {
         for (const [key, value] of Object.entries(THEMES[theme])) {
-            calendar.style.setProperty(`--${key}`, value);
+            calendarContainer.style.setProperty(`--${key}`, value);
         }
     },
     getRandomColor() {
@@ -265,6 +264,7 @@ const UI = {
         button.style.backgroundColor = 'var(--secondaryColor)';
         button.style.color = 'var(--black)';
         button.style.transition = 'background-color .2s, box-shadow .2s';
+        button.style.userSelect = 'none';
         button.addEventListener('focusin', () => button.style.filter = 'var(--dropShadow)');
         button.addEventListener('focusout', () => button.style.filter = '');
         button.addEventListener('blur', () => button.style.filter = '');
@@ -273,6 +273,9 @@ const UI = {
         return button;
     },
     Label() {
+        const label = document.createElement('label');
+        label.style.display = 'block';
+        label.style.width = 'fit-content';
     },
     Textbox() {
         const input = document.createElement('input');
@@ -288,6 +291,8 @@ const UI = {
         input.style.borderRadius = 'var(--borderRadius)';
         input.addEventListener('focusin', () => input.style.backgroundColor = 'var(--secondaryColor)');
         input.addEventListener('focusout', () => input.style.backgroundColor = 'var(--white)');
+        input.addEventListener('pointerenter', () => input.style.boxShadow = 'var(--boxShadow)');
+        input.addEventListener('pointerleave', () => input.style.boxShadow = '');
         return input;
     },
     Textarea() {
@@ -305,6 +310,8 @@ const UI = {
         input.style.height = '4rem';
         input.addEventListener('focusin', () => input.style.backgroundColor = 'var(--secondaryColor)');
         input.addEventListener('focusout', () => input.style.backgroundColor = 'var(--white)');
+        input.addEventListener('pointerenter', () => input.style.boxShadow = 'var(--boxShadow)');
+        input.addEventListener('pointerleave', () => input.style.boxShadow = '');
         return input;
     },
     Select() {
@@ -330,73 +337,68 @@ const UI = {
     Dialog(color) {
         const dialog = document.createElement('dialog');
         dialog.style.borderColor = color;
-        dialog.style.boxShadow = '0px 0px 10px 5px var(--gray)';
+        dialog.style.boxShadow = '0px 0px 0px 200vh color-mix(in srgb, var(--lightAccentColor) 50%, hsla(0, 0%, 0%, 0.5))';
         dialog.style.padding = '1rem';
+        dialog.style.backgroundColor = 'var(--white)';
         dialog.addEventListener('cancel', dialog.remove);
         return dialog;
     },
 };
-const body = document.body;
-body.style.margin = '0px';
-body.style.height = '100vh';
-body.style.paddingTop = '10vh';
-const pageWrapper = document.createElement('div');
-const main = document.createElement('main');
-main.style.display = 'flex';
-main.style.flexDirection = 'column';
-main.style.alignItems = 'center';
-const monthNavigationButtonDiv = document.createElement('div');
-monthNavigationButtonDiv.style.display = 'flex';
-monthNavigationButtonDiv.style.gap = '1rem';
+const navigationButtonDiv = document.createElement('div');
+navigationButtonDiv.style.display = 'flex';
+navigationButtonDiv.style.gap = '1rem';
 const nextButton = UI.Button();
 const prevButton = UI.Button();
 nextButton.textContent = '>';
 prevButton.textContent = '<';
-monthNavigationButtonDiv.replaceChildren(prevButton, nextButton);
+navigationButtonDiv.replaceChildren(prevButton, nextButton);
 nextButton.addEventListener('click', () => {
-    const { year, month } = CONTROLLER.goToNextMonth();
-    setMonthView(year, month);
+    nextButton.blur();
+    if (currentView === 'month') {
+        const { year, month } = CONTROLLER.goToNextMonth();
+        setMonthView(year, month);
+    }
+    else {
+        const date = CONTROLLER.goToNextDay();
+        setDayView(date);
+    }
 });
 prevButton.addEventListener('click', () => {
-    const { year, month } = CONTROLLER.goToPrevMonth();
-    setMonthView(year, month);
-});
-const dayNavigationButtonDiv = document.createElement('div');
-dayNavigationButtonDiv.style.display = 'flex';
-dayNavigationButtonDiv.style.gap = '1rem';
-const nextDayButton = UI.Button();
-const prevDayButton = UI.Button();
-nextDayButton.textContent = '>';
-prevDayButton.textContent = '<';
-dayNavigationButtonDiv.replaceChildren(prevDayButton, nextDayButton);
-nextDayButton.addEventListener('click', () => {
-    const date = CONTROLLER.goToNextDay();
-    setDayView(date);
-});
-prevDayButton.addEventListener('click', () => {
-    const date = CONTROLLER.goToPrevDay();
-    setDayView(date);
+    prevButton.blur();
+    if (currentView === 'month') {
+        const { year, month } = CONTROLLER.goToPrevMonth();
+        setMonthView(year, month);
+    }
+    else {
+        const date = CONTROLLER.goToPrevDay();
+        setDayView(date);
+    }
 });
 const addEventButton = UI.Button();
 addEventButton.textContent = 'Add Event';
 addEventButton.addEventListener('click', () => eventDialog());
 const eventDialog = async (scheduledEvent) => {
     const dialog = UI.Dialog(scheduledEvent?.color ?? '#ccc');
-    calendar.append(dialog);
+    calendarContainer.append(dialog);
     const { form, getResult } = eventForm(scheduledEvent);
     dialog.append(form);
     dialog.showModal();
     const result = await getResult;
-    if (result && scheduledEvent) {
+    if (!result)
+        return dialog.remove();
+    if (scheduledEvent) {
         CONTROLLER.updateEvent(scheduledEvent, result);
     }
-    else if (result) {
+    else {
         CONTROLLER.addEvent(result);
     }
     dialog.remove();
-    if (currentView === 'day') {
-        setDayView(CONTROLLER.getCurrentDate());
-    }
+    const d = result.startTime;
+    CONTROLLER.setCurrentDate(d);
+    if (currentView === 'day')
+        setDayView(d);
+    else
+        setMonthView(d.getFullYear(), d.getMonth() + 1);
 };
 const eventForm = (scheduledEvent) => {
     const { promise, resolve } = Promise.withResolvers();
@@ -424,13 +426,16 @@ const eventForm = (scheduledEvent) => {
     descriptionInput.id = 'description-input';
     const defaultStart = CONTROLLER.getCurrentDate();
     const defaultEnd = new Date(defaultStart.getTime() + 3600000);
-    const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
+    const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime, setCustomValidity } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
     const { datePickerEl: endDateEl, getDate: getEndTime, setDate: setEndTime } = datePicker('End', scheduledEvent?.endTime ?? defaultEnd);
-    form.addEventListener('datechange', () => {
-        const startTime = getStartTime();
-        if (Number(startTime) > Number(getEndTime())) {
-            setEndTime(new Date(Number(startTime) + 3600000));
-        }
+    form.addEventListener('datechange', (e) => {
+        const startTime = Number(getStartTime());
+        const endTime = Number(getEndTime());
+        const isValid = endTime > startTime;
+        setCustomValidity('');
+        if (isValid)
+            return;
+        setCustomValidity('Start date must be before the end date.');
     });
     if (scheduledEvent) {
         nameInput.value = scheduledEvent.name ?? '';
@@ -472,6 +477,7 @@ const datePicker = (title, value) => {
     fieldset.style.gap = '1rem';
     const legend = document.createElement('legend');
     legend.textContent = title;
+    legend.style.padding = '0px .2rem';
     const yearSelect = UI.Select();
     yearSelect.required = true;
     const monthSelect = UI.Select();
@@ -484,6 +490,7 @@ const datePicker = (title, value) => {
     const amPmSelect = UI.Select();
     timeDiv.style.display = 'flex';
     timeDiv.style.gap = '.5rem';
+    timeDiv.style.alignItems = 'center';
     timeDiv.style.justifyContent = 'center';
     hourSelect.required = true;
     minuteSelect.required = true;
@@ -539,9 +546,11 @@ const datePicker = (title, value) => {
         }
         return new Date(Number(yearSelect.value), Number(monthSelect.value), Number(daySelect.value), h, Number(minuteSelect.value));
     };
-    fieldset.addEventListener('change', (e) => {
-        const dayState = Number(daySelect.value);
-        const numberOfDays = CONTROLLER.getNumberOfDaysInMonth(getDate());
+    fieldset.addEventListener('change', () => {
+        let dayState = Number(daySelect.value);
+        const numberOfDays = CONTROLLER.getNumberOfDaysInMonth(new Date(Number(yearSelect.value), Number(monthSelect.value), 1));
+        dayState = dayState > numberOfDays ? numberOfDays : dayState;
+        console.log(numberOfDays);
         daySelect.replaceChildren();
         for (let d = 1; d <= numberOfDays; d++) {
             daySelect.add(new Option(String(d), String(d)));
@@ -556,17 +565,19 @@ const datePicker = (title, value) => {
     dayDiv.append(monthSelect, daySelect, yearSelect);
     fieldset.replaceChildren(legend, dayDiv, timeDiv);
     return {
-        datePickerEl: fieldset, getDate, setDate
+        datePickerEl: fieldset,
+        getDate,
+        setDate,
+        setCustomValidity: (s) => monthSelect.setCustomValidity(s)
     };
 };
 const goBackToMonthButton = UI.Button();
 goBackToMonthButton.textContent = 'Back';
 goBackToMonthButton.addEventListener('click', () => {
+    goBackToMonthButton.blur();
     const date = CONTROLLER.getCurrentDate();
     setMonthView(date.getFullYear(), (date.getMonth() + 1), date.getDate() - 1);
 });
-const calendar = document.createElement('section');
-calendar.style.fontFamily = 'var(--font)';
 const handleDayFocusIn = (e) => e.target.style.boxShadow = 'var(--insetBoxShadow)';
 const handleDayFocusOut = (e) => e.target.style.boxShadow = '';
 const handleDayMouseIn = (e) => e.target.style.backgroundColor = 'var(--hoverBackgroundColor)';
@@ -616,13 +627,10 @@ const handleDayKeydown = (e, i, day, dayButtons) => {
     }
 };
 const getDayView = (day) => {
-    const wrapper = document.createElement('div');
-    wrapper.style.width = 'min(700px, 100vw)';
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
     topDiv.style.display = 'flex';
     topDiv.style.justifyContent = 'space-between';
-    topDiv.style.marginBottom = '2rem';
     const dateHeader = document.createElement('div');
     dateHeader.textContent = day.toISOString().split('T')[0];
     const dayGrid = document.createElement('div');
@@ -630,7 +638,7 @@ const getDayView = (day) => {
     dayGrid.style.rowGap = '2rem';
     dayGrid.style.gridTemplateColumns = 'repeat(96, 1fr)';
     dayGrid.style.minHeight = '12rem';
-    dayGrid.style.padding = '.2rem';
+    dayGrid.style.padding = '.5rem 0px';
     dayGrid.style.outline = 'var(--border)';
     let gridColumnStart = 1;
     for (const time of ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM']) {
@@ -644,6 +652,7 @@ const getDayView = (day) => {
     }
     for (const event of CONTROLLER.getEventsForDay(day)) {
         const eventButton = document.createElement('button');
+        eventButton.type = 'button';
         eventButton.style.border = 'unset';
         eventButton.style.outline = 'unset';
         eventButton.style.borderRadius = '0px';
@@ -662,9 +671,8 @@ const getDayView = (day) => {
         eventButton.addEventListener('focusout', handleDayFocusOut);
         dayGrid.append(eventButton);
     }
-    topDiv.append(goBackToMonthButton, dateHeader, dayNavigationButtonDiv);
-    wrapper.append(topDiv, dayGrid);
-    return wrapper;
+    topDiv.append(goBackToMonthButton, dateHeader, navigationButtonDiv);
+    return { dayGrid, topDiv };
 };
 const getTimeAs15MinuteIncrement = (d) => Math.floor(d.getHours() * 4) + Math.floor(d.getMinutes() / 15) + 1;
 const getGridColumnForEvent = (currentDay, event) => {
@@ -679,19 +687,15 @@ const getGridColumnForEvent = (currentDay, event) => {
     return `${getTimeAs15MinuteIncrement(event.startTime)} / ${getTimeAs15MinuteIncrement(event.endTime)}`;
 };
 const getMonthView = (month) => {
-    const wrapper = document.createElement('div');
-    wrapper.style.width = 'min(700px, 100vw)';
     const y = month[0].getFullYear();
     const m = month[0].getMonth();
     const topDiv = document.createElement('div');
     topDiv.style.fontSize = '1.5em';
     topDiv.style.display = 'flex';
     topDiv.style.justifyContent = 'space-between';
-    topDiv.style.marginBottom = '2rem';
     const dateHeader = document.createElement('div');
     dateHeader.textContent = `${monthsOfTheYear[m]} ${y}`;
     const monthGrid = document.createElement('div');
-    monthGrid.style.boxSizing = 'border-box';
     monthGrid.style.display = 'grid';
     monthGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
     monthGrid.style.gap = '1px';
@@ -700,6 +704,7 @@ const getMonthView = (month) => {
         const dayOfTheWeekNameDiv = document.createElement('div');
         dayOfTheWeekNameDiv.textContent = daysOfTheWeek[i];
         dayOfTheWeekNameDiv.style.textAlign = 'center';
+        dayOfTheWeekNameDiv.style.paddingBottom = '1rem';
         return dayOfTheWeekNameDiv;
     }));
     const dayButtons = month.map((day, i) => {
@@ -746,30 +751,19 @@ const getMonthView = (month) => {
         }
         return dayButton;
     });
-    topDiv.append(dateHeader, monthNavigationButtonDiv);
+    topDiv.append(dateHeader, navigationButtonDiv);
     monthGrid.append(...dayButtons);
-    wrapper.append(topDiv, monthGrid);
     return {
-        element: wrapper,
+        topDiv,
+        monthGrid,
         dayButtons
     };
 };
-const themeSelect = UI.Select();
-for (const key in THEMES) {
-    themeSelect.add(new Option(key, key, false));
-}
-themeSelect.addEventListener('change', () => UI.setTheme(themeSelect.value ?? 'mint'));
-UI.setTheme();
-const footerSection = document.createElement('div');
-footerSection.style.display = 'flex';
-footerSection.style.justifyContent = 'space-evenly';
-footerSection.style.height = 'max(3rem, fit-content)';
-footerSection.style.marginTop = '3rem';
-footerSection.append(addEventButton, themeSelect);
 const setMonthView = (year, month, focusIndex) => {
     currentView = 'month';
-    const { element, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
-    calendar.replaceChildren(element, footerSection);
+    const { monthGrid, topDiv, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
+    header.replaceChildren(topDiv);
+    main.replaceChildren(monthGrid);
     if (typeof focusIndex === 'number') {
         dayButtons.at(focusIndex)?.focus();
     }
@@ -777,8 +771,35 @@ const setMonthView = (year, month, focusIndex) => {
 const setDayView = (day) => {
     currentView = 'day';
     CONTROLLER.setCurrentDate(day);
-    calendar.replaceChildren(getDayView(day), footerSection);
+    const { topDiv, dayGrid } = getDayView(day);
+    header.replaceChildren(topDiv);
+    main.replaceChildren(dayGrid);
 };
+const themeSelect = UI.Select();
+for (const key in THEMES) {
+    themeSelect.add(new Option(key, key, false));
+}
+themeSelect.addEventListener('change', () => UI.setTheme(themeSelect.value ?? 'mint'));
+const calendarContainer = document.createElement('div');
+calendarContainer.style.width = 'min(700px, 100vw)';
+calendarContainer.style.display = 'flex';
+calendarContainer.style.flexFlow = 'column';
+calendarContainer.style.gap = '2rem';
+const header = document.createElement('header');
+const main = document.createElement('main');
+const footer = document.createElement('footer');
+footer.style.display = 'flex';
+footer.style.justifyContent = 'space-evenly';
+footer.style.height = 'max(3rem, fit-content)';
+footer.append(addEventButton, themeSelect);
+calendarContainer.replaceChildren(header, main, footer);
+calendarContainer.dataset.name = 'sw-calendar';
+calendarContainer.style.fontFamily = 'var(--font)';
+UI.setTheme();
 setMonthView(todayYear, todayMonth);
-main.replaceChildren(calendar);
-body.replaceChildren(main);
+const body = document.body;
+body.style.margin = '0px';
+body.style.height = '100vh';
+body.style.display = 'grid';
+body.style.placeItems = 'center';
+body.replaceChildren(calendarContainer);

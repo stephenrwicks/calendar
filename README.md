@@ -18,7 +18,9 @@ Using native date inputs (input type="date") is also banned just in the spirit o
 
 --
 
-Interesting stuff I've done so far that I will forget unless I write it out:
+Interesting stuff I've encountered so far that I will forget unless I write it out:
+
+I used the Date object. This would be cool to write with the new Temporal API but it's not widely available yet, October-November 2025. The Date API's months are zero-indexed, but days aren't. That's pretty annoying.
 
 Since I banned myself from making a stylesheet, I accidentally "invented" a theming pattern. I originally was setting all color properties, like el.style.color = 'blue'. Then I started using saved properties from an object, like el.style.color = theme.blue. Then I made it so there is a setTheme function that takes the theme object and loops over its key/values and injects each property into the calendar's top level DOM object as a CSS variable, and I made all the individual elements inside just consume the CSS variables instead of JS variables. It is basically a native CSS stylesheet, it just exists in the parent element as CSS variables. Once you rerun setTheme, you change the theme at the parent node, so the child elements all react natively without rerendering. An interesting thing about this pattern is that you could easily override the theme with a different theme in any child node by simply injecting it at a lower level, and the cascade just works.
 
@@ -28,9 +30,9 @@ I ended up making "Controller" and "UI" layers that operate independently.
 
 The controller encapsulates all the date logic so the calendar logic itself (pretty much) doesn't have to worry about it. Some simple considerations of a calendar took some thought: How many days are in a given month? How do you figure out which day of the week a month starts on? If you advance an hour, what day is it? If a scheduled event starts on day A and ends on day B, how many days should it display on? Etc.
 
-UI object makes basic styled components and handles theming. I could one day expand it and make a full UI library for these script-only projects.
+UI object makes returns styled components and handles theming. I could one day expand it and make a full UI library for these script-only projects.
 
-I used Promise.withResolvers() to return an html form and a promise that resolves to the result of the submitted form at the same time: return { form, getResult: promise }; withResolvers is pretty new so I hadn't used this pattern before. This is basically the same as returning a callback though.
+I used Promise.withResolvers() to return an html form and a promise that resolves to the result of the submitted form at the same time: return { form, getResult: promise }; - withResolvers is pretty new so I hadn't used this pattern before. This is basically the same as returning a callback though.
 
 I lined up scheduled events to the correct time of day by displaying a CSS grid with 96 columns (15 minute increments) and then using grid-column-start and -end.
 
@@ -38,4 +40,7 @@ I used CustomEvent bubbling to validate the two date pickers against each other 
 
 At first I stored all scheduled events in an array, and then for any given date I would loop through the entire array and check the entire range of days for each event and check if any of those days was the given date. That was some bad nested looping so I fixed that to use Map and Set for faster lookup. (Even though for a project like this it doesn't really matter.)
 
+I used CSS color-mix() for the first time which was not hard to figure out and seems useful.
+
+In CSS the native dialog element has a ::backdrop pseudo-element. I can't use that without regular CSS. But it's super easy to replicate with a giant box-shadow with no blur or offset (only spread, the 4th value). Assign a color with .5 alpha value and it's translucent.
 
