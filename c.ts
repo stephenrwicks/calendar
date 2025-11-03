@@ -18,23 +18,6 @@ type ScheduledEvent = {
     color?: string;
 }
 
-
-type Theme = {
-    primaryColor: string;
-    secondaryColor: string;
-    darkAccentColor: string;
-    lightAccentColor: string;
-    black: string;
-    white: string;
-    gray: string;
-    lightGray: string;
-    alert: string;
-    border: string;
-    boxShadow: string;
-    insetBoxShadow: string;
-    dropShadow: string;
-}
-
 // It would have been fun to use the new Temporal API for this project but it's not widely available yet ~October 2025
 
 const STARTYEAR = 2000;
@@ -45,7 +28,7 @@ const todayMonth = (initTime.getMonth() + 1) as Month;
 const todayDay = initTime.getDate();
 let currentView: 'month' | 'day' = 'month';
 const daysOfTheWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const monthsOfTheYear = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthsOfTheYear = ['❄️ January', '❤️ February', '☘️ March', '🌧️ April', '🌼 May', '☀️ June', '🎇 July', '🏖️ August', '🍂 September', '🎃 October', '🦃 November', '🎄 December'];
 
 
 const CONTROLLER = (() => {
@@ -108,7 +91,8 @@ const CONTROLLER = (() => {
     // Map and Set are way faster than Arrays. Easily avoids nested loops
     // Earlier in this project I was getting all events for a given date by looping through every event and checking its date range
     const EVENTMAP: Map<string, Set<ScheduledEvent>> = new Map();
-
+    // Set of all events for export
+    const EVENTSET: Set<ScheduledEvent> = new Set();
     const mapEventToDay = (scheduledEvent: ScheduledEvent, date: Date) => {
         const dayString = date.toISOString().slice(0, 10); // Removes timestamp
         const eventsSet = EVENTMAP.get(dayString);
@@ -129,7 +113,18 @@ const CONTROLLER = (() => {
         for (const date of dates) {
             mapEventToDay(scheduledEvent as ScheduledEvent, date);
         }
+        EVENTSET.add(scheduledEvent);
     }
+
+    const removeEvent = (scheduledEvent: ScheduledEvent) => {
+        const dates = getDatesInRange(scheduledEvent);
+        for (const date of dates) {
+            const dayString = date.toISOString().slice(0, 10); // Removes timestamp
+            const eventsSet = EVENTMAP.get(dayString);
+            eventsSet?.delete(scheduledEvent);
+        }
+        EVENTSET.delete(scheduledEvent);
+    };
 
     const updateEvent = (scheduledEvent: ScheduledEvent, updatedData: Omit<ScheduledEvent, 'color'>) => {
         removeEvent(scheduledEvent);
@@ -140,35 +135,32 @@ const CONTROLLER = (() => {
         addEvent(scheduledEvent);
     };
 
-    const removeEvent = (scheduledEvent: ScheduledEvent) => {
-        const dates = getDatesInRange(scheduledEvent);
-        for (const date of dates) {
-            const dayString = date.toISOString().slice(0, 10); // Removes timestamp
-            const eventsSet = EVENTMAP.get(dayString);
-            eventsSet?.delete(scheduledEvent);
-        }
-    };
-
-    const exportEvents = () => {
-        // The original references of the ScheduledEvent objects are never lost,
-        // so we can just add each to a single set over and over if one occurs in multiple days
-        // so the "duplicates" are removed (They are not really duplicates)
-        const eventSet: Set<ScheduledEvent> = new Set();
-        for (const set of EVENTMAP.values()) {
-            for (const event of set) {
-                eventSet.add(event);
-            }
-        }
-        // Could easily build a csv with this data
-        return [...eventSet].map(event => {
+    const getEventsFile = () => {
+        const eventsJson = JSON.stringify([...EVENTSET].map(event => {
             return {
                 name: event.name,
                 description: event.description,
-                start: event.startTime.toISOString(),
-                end: event.endTime.toISOString(),
+                startTime: event.startTime.toISOString(),
+                endTime: event.endTime.toISOString(),
             };
-        });
+        }));
+        const fileBlob = new Blob([eventsJson]);
+        const file = new File([fileBlob], 'events.json', { type: 'application/json' });
+        return file;
+
     };
+
+    const importEvents = (scheduledEvents: ScheduledEvent[]) => {
+        EVENTSET.clear();
+        EVENTMAP.clear();
+        for (const event of scheduledEvents) {
+            // Convert these back into Date objects instead of ISO strings
+            // Dates would already be normalized to 15 minute increments in theory
+            event.startTime = new Date(event.startTime);
+            event.endTime = new Date(event.endTime);
+            addEvent(event);
+        }
+    }
 
     const getEventsForDay = (day: Date) => EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
 
@@ -230,15 +222,18 @@ const CONTROLLER = (() => {
         updateEvent,
         removeEvent,
         getNumberOfDaysInMonth,
-        exportEvents,
+        getEventsFile,
+        importEvents,
     };
 
 })();
 
 // This could be something cooler like a createTheme() function that is flexible. 
 // But that will have to be in another project
+// I think I want to change the entire theme token system to stuff that is completely semantic like
+// buttonBackgroundColor, etc. Then export JS variables that map back to the CSS variables so it's easier to use
 const THEMES = {
-    mint: (() => {
+    '🌿': (() => {
         const font = 'normal 16px Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif';
         const primaryColor = 'green';
         const secondaryColor = 'mintcream';
@@ -254,6 +249,7 @@ const THEMES = {
         const black = 'black';
         const white = 'white';
         const alert = 'orange';
+        const background = 'hsla(180, 100%, 25%, .1)';
         return {
             font,
             black,
@@ -270,14 +266,15 @@ const THEMES = {
             boxShadow,
             insetBoxShadow,
             dropShadow,
+            background,
         };
     })(),
-    midnight: (() => {
-        const font = 'italic 16px Georgia, Cambria, "Times New Roman", Times, serif';
+    '🌙': (() => {
+        const font = 'normal 16px Georgia, Cambria, "Times New Roman", Times, serif';
         const black = 'hsl(220, 20%, 10%)';
-        const white = 'hsl(220, 30%, 97%)';
+        const white = 'aliceblue';
         const primaryColor = 'midnightblue';
-        const secondaryColor = 'aliceblue';
+        const secondaryColor = 'hsla(220, 100%, 30%, .1)';
         const darkAccentColor = 'hsla(220, 100%, 30%, 1)';
         const lightAccentColor = 'hsla(220, 100%, 30%, 1)';
         const gray = '#c8c8c8';
@@ -288,7 +285,7 @@ const THEMES = {
         const dropShadow = `drop-shadow(0px 0px 2px ${darkAccentColor})`;
         const borderRadius = '0px';
         const alert = 'goldenrod';
-
+        const background = 'aliceblue';
         return {
             font,
             black,
@@ -305,12 +302,13 @@ const THEMES = {
             boxShadow,
             insetBoxShadow,
             dropShadow,
+            background,
         };
     })(),
 } as const;
 
 const UI = {
-    setTheme(theme: keyof typeof THEMES = 'mint') {
+    setTheme(theme: keyof typeof THEMES = '🌿') {
         // Inject CSS properties into parent.
         // This is a cool pattern. We are basically creating a stylesheet.
         // But deeper levels of the DOM could override by injecting a different theme.
@@ -320,7 +318,7 @@ const UI = {
         }
 
         // Could make this more interesting by injecting all themes, but prefixing them, like --mint--${key}
-        // Then some property like data-theme controls the variable to use
+        // Then some theme() function returns the css variable?
     },
     getRandomColor() {
         const colors = [
@@ -443,8 +441,51 @@ const UI = {
         dialog.addEventListener('cancel', dialog.remove);
         return dialog;
     },
-    MonthButton() {
+    DayButton(isToday: boolean) {
+        const dayButton = document.createElement('button');
+        dayButton.type = 'button';
+        dayButton.style.setProperty('--backgroundColor', isToday ? 'var(--darkAccentColor)' : 'unset');
+        dayButton.style.setProperty('--hoverBackgroundColor', isToday ? 'var(--lightAccentColor)' : 'var(--lightGray');
+        dayButton.style.color = isToday ? 'white' : '';
+        dayButton.style.backgroundColor = 'var(--backgroundColor)';
+        dayButton.style.border = 'unset';
+        dayButton.style.borderRadius = '0px';
+        dayButton.style.cursor = 'pointer';
+        dayButton.style.padding = '.5em';
+        dayButton.style.outline = 'var(--border)';
+        return dayButton;
+    },
+    MonthSelect() {
+        const select = document.createElement('select');
+        select.style.display = 'inline';
+        select.style.appearance = 'none';
+        select.style.textAlign = 'center';
+        select.style.border = '0px';
+        select.style.borderRadius = '0px';
+        select.style.background = 'transparent';
+        select.style.cursor = 'pointer';
 
+        select.style.padding = '.1em';
+        select.style.font = 'inherit';
+
+        select.style.outline = '0px';
+
+
+        //select.style.backgroundColor = 'var(--secondaryColor)';
+
+        select.style.color = 'var(--black)';
+
+        select.style.transition = 'background-color .2s, box-shadow .2s';
+
+        monthsOfTheYear.forEach((month, i) => {
+            const isSelected = CONTROLLER.getCurrentDate().getMonth() === i;
+            select.add(new Option(month, String(i), false, isSelected));
+        });
+        select.addEventListener('change', () => {
+            const currentDate = CONTROLLER.getCurrentDate();
+            setMonthView(currentDate.getFullYear() as Year, Number(select.value) + 1 as Month)
+        });
+        return select;
     },
     Confirm(parent: HTMLElement, message: string): Promise<boolean> {
         return new Promise(resolve => {
@@ -487,6 +528,128 @@ const UI = {
             parent.append(dialog);
             dialog.showModal();
         });
+    },
+    DatePicker(title: string, value: Date) {
+        // Avoiding native date input
+        const fieldset = document.createElement('fieldset');
+        fieldset.style.display = 'grid';
+        fieldset.style.margin = '0px';
+        fieldset.style.gap = '1em';
+        fieldset.style.border = '1px solid var(--primaryColor)';
+
+        const legend = document.createElement('legend');
+        legend.textContent = title;
+        legend.style.padding = '0px .2em';
+
+        const yearSelect = UI.Select();
+        yearSelect.required = true;
+
+        const monthSelect = UI.Select();
+        monthSelect.required = true;
+
+        const daySelect = UI.Select();
+        daySelect.required = true;
+
+        const timeDiv = document.createElement('div');
+        const hourSelect = UI.Select();
+        const minuteSelect = UI.Select();
+        const amPmSelect = UI.Select();
+        timeDiv.style.display = 'flex';
+        timeDiv.style.gap = '.5em';
+        timeDiv.style.alignItems = 'center';
+        timeDiv.style.justifyContent = 'center';
+        hourSelect.required = true;
+        minuteSelect.required = true;
+        amPmSelect.required = true;
+
+        for (let y = STARTYEAR; y <= ENDYEAR; y++) {
+            yearSelect.add(new Option(String(y), String(y)));
+        }
+        for (let m = 0; m <= 11; m++) {
+            monthSelect.add(new Option(monthsOfTheYear[m], String(m)));
+        }
+        for (let d = 1; d <= CONTROLLER.getNumberOfDaysInMonth(value); d++) {
+            daySelect.add(new Option(String(d), String(d)));
+        }
+        for (let h = 1; h <= 12; h++) {
+            hourSelect.add(new Option(String(h), String(h)));
+        }
+        minuteSelect.add(new Option('00', '0'));
+        minuteSelect.add(new Option('15', '15'));
+        minuteSelect.add(new Option('30', '30'));
+        minuteSelect.add(new Option('45', '45'));
+        amPmSelect.add(new Option('AM', 'AM'));
+        amPmSelect.add(new Option('PM', 'PM'));
+
+        const setDate = (value: Date) => {
+            yearSelect.value = String(value.getFullYear());
+            monthSelect.value = String(value.getMonth());
+            daySelect.value = String(value.getDate());
+            let hours = value.getHours();
+            if (hours === 0) hours = 12;
+            hourSelect.value = hours > 12 ? String(hours - 12) : String(hours);
+            amPmSelect.value = value.getHours() >= 12 ? 'PM' : 'AM';
+            let minutes = value.getMinutes();
+            let minutesValue: string;
+            if (minutes < 15) minutesValue = '0';
+            else if (minutes < 30) minutesValue = '15';
+            else if (minutes < 45) minutesValue = '30';
+            else minutesValue = '45';
+            minuteSelect.value = minutesValue;
+        };
+
+        setDate(value);
+
+        const getDate = () => {
+            const isPm = amPmSelect.value === 'PM';
+            let h = Number(hourSelect.value);
+            if (h === 12) {
+                // Always set 12:00 to zero
+                h = 0;
+            }
+            if (isPm) {
+                // If 12:00 is actually noon it will get set back to 12
+                // Otherwise, we need 2 PM to be 14:00, etc.
+                h = h + 12;
+            }
+            return new Date(
+                Number(yearSelect.value),
+                Number(monthSelect.value),
+                Number(daySelect.value),
+                h,
+                Number(minuteSelect.value)
+            );
+        };
+
+        fieldset.addEventListener('change', () => {
+            // Update "day" input to reflect the number of days
+            let dayState = Number(daySelect.value);
+            // BUG
+            const numberOfDays = CONTROLLER.getNumberOfDaysInMonth(new Date(Number(yearSelect.value), Number(monthSelect.value), 1));
+            dayState = dayState > numberOfDays ? numberOfDays : dayState;
+            daySelect.replaceChildren();
+            for (let d = 1; d <= numberOfDays; d++) {
+                daySelect.add(new Option(String(d), String(d)));
+            }
+
+            daySelect.value = String(dayState);
+            fieldset.dispatchEvent(new CustomEvent('datechange', { bubbles: true }));
+        });
+
+
+        timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect)
+        const dayDiv = document.createElement('div');
+        dayDiv.style.display = 'flex';
+        dayDiv.style.gap = '.5em';
+        dayDiv.append(monthSelect, daySelect, yearSelect);
+        fieldset.replaceChildren(legend, dayDiv, timeDiv);
+
+        return {
+            datePickerEl: fieldset,
+            getDate,
+            setDate,
+            setCustomValidity: (error: string) => monthSelect.setCustomValidity(error)
+        };
     }
 };
 
@@ -497,34 +660,40 @@ navigationButtonDiv.style.display = 'flex';
 navigationButtonDiv.style.gap = '1em';
 const nextButton = UI.Button();
 const prevButton = UI.Button();
-nextButton.textContent = '>';
-prevButton.textContent = '<';
+nextButton.style.width = '2em';
+prevButton.style.width = '2em';
+nextButton.textContent = '❯';
+prevButton.textContent = '❮';
 navigationButtonDiv.replaceChildren(prevButton, nextButton);
 nextButton.addEventListener('click', () => {
     nextButton.style.filter = '';
     if (currentView === 'month') {
         const { year, month } = CONTROLLER.goToNextMonth();
+        mainMonthSelect.value = String(month - 1);
         setMonthView(year, month);
     }
     else {
         const date = CONTROLLER.goToNextDay();
         setDayView(date);
+        mainMonthSelect.value = String(date.getMonth());
     }
 });
 prevButton.addEventListener('click', () => {
     prevButton.style.filter = '';
     if (currentView === 'month') {
         const { year, month } = CONTROLLER.goToPrevMonth();
+        mainMonthSelect.value = String(month - 1);
         setMonthView(year, month);
     }
     else {
         const date = CONTROLLER.goToPrevDay();
         setDayView(date);
+        mainMonthSelect.value = String(date.getMonth());
     }
 });
 
 const addEventButton = UI.Button();
-addEventButton.textContent = 'Add Event';
+addEventButton.textContent = '📌';
 addEventButton.addEventListener('click', (e) => {
     e.preventDefault();
     eventDialog();
@@ -532,9 +701,11 @@ addEventButton.addEventListener('click', (e) => {
 
 const eventDialog = async (scheduledEvent?: ScheduledEvent) => {
     const dialog = UI.Dialog(scheduledEvent?.color ?? 'var(--primaryColor)');
+
+
     calendarContainer.append(dialog);
     const { form, getResult } = eventForm(scheduledEvent);
-    dialog.append(form);
+    dialog.replaceChildren(form);
     dialog.showModal();
     const result = await getResult;
     if (!result) return dialog.remove();
@@ -560,6 +731,12 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     form.style.flexFlow = 'column';
     form.style.gap = '1em';
 
+    const h1 = document.createElement('h1');
+    h1.textContent = '📌 Add event';
+    h1.style.margin = 'unset';
+    h1.style.fontSize = '1.2em';
+    h1.style.fontWeight = 'normal';
+
     const nameDiv = document.createElement('div');
     const nameLabel = UI.Label();
     const nameInput = UI.Textbox();
@@ -579,8 +756,8 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
 
     const defaultStart = CONTROLLER.getCurrentDate();
     const defaultEnd = new Date(defaultStart.getTime() + 3600000); // One hour
-    const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime, setCustomValidity } = datePicker('Start', scheduledEvent?.startTime ?? defaultStart);
-    const { datePickerEl: endDateEl, getDate: getEndTime, setDate: setEndTime } = datePicker('End', scheduledEvent?.endTime ?? defaultEnd);
+    const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime, setCustomValidity } = UI.DatePicker('Start', scheduledEvent?.startTime ?? defaultStart);
+    const { datePickerEl: endDateEl, getDate: getEndTime, setDate: setEndTime } = UI.DatePicker('End', scheduledEvent?.endTime ?? defaultEnd);
 
     // Some validation, still not right
     // This is really bad and hard to use. maybe just setValidity instead
@@ -623,6 +800,7 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
     nameDiv.replaceChildren(nameLabel, nameInput);
     descriptionDiv.replaceChildren(descriptionLabel, descriptionInput);
     form.replaceChildren(
+        h1,
         nameDiv,
         descriptionDiv,
         startDateEl,
@@ -634,130 +812,6 @@ const eventForm = (scheduledEvent?: ScheduledEvent) => {
         getResult: promise
     };
 };
-
-const datePicker = (title: string, value: Date) => {
-    // Avoiding native date input
-    const fieldset = document.createElement('fieldset');
-    fieldset.style.display = 'grid';
-    fieldset.style.margin = '0px';
-    fieldset.style.gap = '1em';
-    fieldset.style.border = '1px solid var(--primaryColor)';
-
-    const legend = document.createElement('legend');
-    legend.textContent = title;
-    legend.style.padding = '0px .2em';
-
-    const yearSelect = UI.Select();
-    yearSelect.required = true;
-
-    const monthSelect = UI.Select();
-    monthSelect.required = true;
-
-    const daySelect = UI.Select();
-    daySelect.required = true;
-
-    const timeDiv = document.createElement('div');
-    const hourSelect = UI.Select();
-    const minuteSelect = UI.Select();
-    const amPmSelect = UI.Select();
-    timeDiv.style.display = 'flex';
-    timeDiv.style.gap = '.5em';
-    timeDiv.style.alignItems = 'center';
-    timeDiv.style.justifyContent = 'center';
-    hourSelect.required = true;
-    minuteSelect.required = true;
-    amPmSelect.required = true;
-
-    for (let y = STARTYEAR; y <= ENDYEAR; y++) {
-        yearSelect.add(new Option(String(y), String(y)));
-    }
-    for (let m = 0; m <= 11; m++) {
-        monthSelect.add(new Option(monthsOfTheYear[m], String(m)));
-    }
-    for (let d = 1; d <= CONTROLLER.getNumberOfDaysInMonth(value); d++) {
-        daySelect.add(new Option(String(d), String(d)));
-    }
-    for (let h = 1; h <= 12; h++) {
-        hourSelect.add(new Option(String(h), String(h)));
-    }
-    minuteSelect.add(new Option('00', '0'));
-    minuteSelect.add(new Option('15', '15'));
-    minuteSelect.add(new Option('30', '30'));
-    minuteSelect.add(new Option('45', '45'));
-    amPmSelect.add(new Option('AM', 'AM'));
-    amPmSelect.add(new Option('PM', 'PM'));
-
-    const setDate = (value: Date) => {
-        yearSelect.value = String(value.getFullYear());
-        monthSelect.value = String(value.getMonth());
-        daySelect.value = String(value.getDate());
-        let hours = value.getHours();
-        if (hours === 0) hours = 12;
-        hourSelect.value = hours > 12 ? String(hours - 12) : String(hours);
-        amPmSelect.value = value.getHours() >= 12 ? 'PM' : 'AM';
-        let minutes = value.getMinutes();
-        let minutesValue: string;
-        if (minutes < 15) minutesValue = '0';
-        else if (minutes < 30) minutesValue = '15';
-        else if (minutes < 45) minutesValue = '30';
-        else minutesValue = '45';
-        minuteSelect.value = minutesValue;
-    };
-
-    setDate(value);
-
-    const getDate = () => {
-        const isPm = amPmSelect.value === 'PM';
-        let h = Number(hourSelect.value);
-        if (h === 12) {
-            // Always set 12:00 to zero
-            h = 0;
-        }
-        if (isPm) {
-            // If 12:00 is actually noon it will get set back to 12
-            // Otherwise, we need 2 PM to be 14:00, etc.
-            h = h + 12;
-        }
-        return new Date(
-            Number(yearSelect.value),
-            Number(monthSelect.value),
-            Number(daySelect.value),
-            h,
-            Number(minuteSelect.value)
-        );
-    };
-
-    fieldset.addEventListener('change', () => {
-        // Update "day" input to reflect the number of days
-        let dayState = Number(daySelect.value);
-        // BUG
-        const numberOfDays = CONTROLLER.getNumberOfDaysInMonth(new Date(Number(yearSelect.value), Number(monthSelect.value), 1));
-        dayState = dayState > numberOfDays ? numberOfDays : dayState;
-        daySelect.replaceChildren();
-        for (let d = 1; d <= numberOfDays; d++) {
-            daySelect.add(new Option(String(d), String(d)));
-        }
-
-        daySelect.value = String(dayState);
-        fieldset.dispatchEvent(new CustomEvent('datechange', { bubbles: true }));
-    });
-
-
-    timeDiv.replaceChildren(hourSelect, ':', minuteSelect, amPmSelect)
-    const dayDiv = document.createElement('div');
-    dayDiv.style.display = 'flex';
-    dayDiv.style.gap = '.5em';
-    dayDiv.append(monthSelect, daySelect, yearSelect);
-    fieldset.replaceChildren(legend, dayDiv, timeDiv);
-
-    return {
-        datePickerEl: fieldset,
-        getDate,
-        setDate,
-        setCustomValidity: (error: string) => monthSelect.setCustomValidity(error)
-    };
-};
-
 
 const goBackToMonthButton = UI.Button();
 goBackToMonthButton.textContent = 'Back';
@@ -910,7 +964,9 @@ const getMonthView = (month: Date[]) => {
     topDiv.style.justifyContent = 'space-between';
 
     const dateHeader = document.createElement('div');
-    dateHeader.textContent = `${monthsOfTheYear[m]} ${y}`;
+    dateHeader.style.fontStyle = 'normal';
+    dateHeader.append(mainMonthSelect, String(y));
+    //dateHeader.textContent = `${monthsOfTheYear[m]} ${y}`;
 
     const monthGrid = document.createElement('div');
     monthGrid.style.display = 'grid';
@@ -929,18 +985,7 @@ const getMonthView = (month: Date[]) => {
     const dayButtons = month.map((day, i) => {
         const isToday = (day.getFullYear() === todayYear) && (day.getMonth() + 1 === todayMonth) && (day.getDate() === todayDay);
         const eventsForThisDay = CONTROLLER.getEventsForDay(day);
-        const dayButton = document.createElement('button');
-
-        dayButton.type = 'button';
-        dayButton.style.setProperty('--backgroundColor', isToday ? 'var(--darkAccentColor)' : 'unset');
-        dayButton.style.setProperty('--hoverBackgroundColor', isToday ? 'var(--lightAccentColor)' : 'var(--lightGray');
-        dayButton.style.color = isToday ? 'white' : '';
-        dayButton.style.backgroundColor = 'var(--backgroundColor)';
-        dayButton.style.border = 'unset';
-        dayButton.style.borderRadius = '0px';
-        dayButton.style.cursor = 'pointer';
-        dayButton.style.padding = '.5em';
-        dayButton.style.outline = 'var(--border)';
+        const dayButton = UI.DayButton(isToday);
         dayButton.addEventListener('focusin', (e) => {
             handleDayFocusIn(e);
             CONTROLLER.setCurrentDate(day)
@@ -973,7 +1018,7 @@ const getMonthView = (month: Date[]) => {
         return dayButton;
     });
 
-    topDiv.append(dateHeader, navigationButtonDiv);
+    topDiv.append(prevButton, dateHeader, nextButton);
     monthGrid.append(...dayButtons);
 
     return {
@@ -986,7 +1031,7 @@ const getMonthView = (month: Date[]) => {
 
 const setMonthView = (year: Year, month: Month, focusIndex?: number) => {
     currentView = 'month';
-    //CONTROLLER.setCurrentDate(new Date(year, month - 1, 1));
+    CONTROLLER.setCurrentDate(new Date(year, month - 1, 1));
     const { monthGrid, topDiv, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
     header.replaceChildren(topDiv);
     main.replaceChildren(monthGrid);
@@ -1007,11 +1052,59 @@ const themeSelect = UI.Select();
 for (const key in THEMES) {
     themeSelect.add(new Option(key, key))
 }
-themeSelect.addEventListener('change', () => UI.setTheme(themeSelect.value as keyof typeof THEMES ?? 'mint'));
+themeSelect.addEventListener('change', () => UI.setTheme(themeSelect.value as keyof typeof THEMES ?? '🌿'));
 
-const logButton = UI.Button();
-logButton.textContent = 'Log Events';
-logButton.addEventListener('click', () => console.log(CONTROLLER.exportEvents()));
+const saveButton = UI.Button();
+saveButton.textContent = '💾';
+//saveButton.title = 'Save Events';
+saveButton.style.fontStyle = 'normal';
+saveButton.addEventListener('click', () => {
+    const a = document.createElement('a');
+    const file = CONTROLLER.getEventsFile();
+    const url = URL.createObjectURL(file);
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(url)
+});
+const openButton = UI.Button();
+openButton.textContent = '📂';
+openButton.addEventListener('click', () => {
+    fileInput.click();
+    // we return too fast. I forget how i did this
+    // if (!files?.length) return;
+    // const file = files[0];
+    // console.log(file);
+});
+//openButton.title = 'Import Events';
+
+const mainMonthSelect = UI.MonthSelect();
+
+const fileInput = document.createElement('input');
+fileInput.type = 'file';
+fileInput.accept = 'application/json';
+fileInput.addEventListener('change', async () => {
+    console.log(fileInput.files);
+    const files = fileInput.files;
+    if (!files || !files.length) {
+        // Prob don't need to do this since it's not multiple
+        fileInput.value = '';
+        return;
+    }
+    // Need some validation in here
+    // Can move to controller
+    const json = await files[0].text();
+    const events = JSON.parse(json);
+    if (Array.isArray(events) && events.length) {
+        CONTROLLER.importEvents(events);
+    }
+    if (currentView = 'day') {
+        //setDayView()
+    }
+    else {
+        //setMonthView()
+    }
+});
 
 const calendarContainer = document.createElement('div');
 calendarContainer.style.width = 'min(700px, 100vw)';
@@ -1020,20 +1113,22 @@ calendarContainer.style.flexFlow = 'column';
 calendarContainer.style.gap = '2em';
 calendarContainer.style.padding = '3em';
 calendarContainer.style.boxShadow = 'var(--boxShadow)';
-calendarContainer.style.backgroundColor = 'var(--secondaryColor)';
+calendarContainer.style.backgroundColor = 'var(--background)';
 calendarContainer.style.font = 'var(--font)';
 
 const header = document.createElement('header');
 const main = document.createElement('main');
-main.style.height = '15em';
+main.style.minHeight = '15em';
 const footer = document.createElement('footer');
 footer.style.display = 'flex';
 footer.style.justifyContent = 'space-evenly';
 footer.style.height = 'max(3em, fit-content)';
 footer.style.fontSize = '1.2em';
-footer.append(addEventButton, logButton, themeSelect);
+footer.append(addEventButton, saveButton, openButton, themeSelect);
 calendarContainer.replaceChildren(header, main, footer);
 calendarContainer.dataset.name = 'sw-calendar';
+
+
 
 
 // Init
@@ -1050,12 +1145,15 @@ body.replaceChildren(calendarContainer);
 
 
 // TODO
-// Delete events
+// Export / import
+// Delete events button
+// "View event" mode rather than edit
 // Fix text stretching event
 // Colored text
-// UI for month button
-// Offset time with negative marginLeft so it's more accurate
+// UI for day button in month calendar
+// Offset time of day with negative marginLeft so it's more accurate
+// "Back button" UI - What should actually be displayed?
 
 // Known bugs
 // Event showing up on wrong day. I don't know why or when
-// Switching months in date picker is messed up
+// Switching months in date picker is messed up in certain case
