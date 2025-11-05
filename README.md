@@ -22,6 +22,8 @@ Interesting stuff I've encountered so far that I will forget unless I write it o
 
 I used the Date object. This would be cool to write with the new Temporal API but it's not widely available yet, October-November 2025. The Date API's months are zero-indexed, but days aren't. That's pretty annoying.
 
+I want to include holidays on the calendar. But including Easter is its own project that requires some complex calculations. (I could copy over someone else's existing code but for now I'd rather not.)
+
 Since I banned myself from making a stylesheet, I accidentally "invented" a theming pattern. I originally was setting all color properties, like el.style.color = 'blue'. Then I started using saved properties from an object, like el.style.color = theme.blue. Then I made it so there is a setTheme function that takes the theme object and loops over its key/values and injects each property into the calendar's top level DOM object as a CSS variable, and I made all the individual elements inside just consume the CSS variables instead of JS variables. It is basically a native CSS stylesheet, it just exists in the parent element as CSS variables. Once you rerun setTheme, you change the theme at the parent node, so the child elements all react natively without rerendering. An interesting thing about this pattern is that you could easily override the theme with a different theme in any child node by simply injecting it at a lower level, and the cascade just works.
 
 Without a stylesheet, CSS pseudoclasses like :hover are impossible (I think) so I had to handle everything like focusin, focusout, etc with JS events, which is tricky.
@@ -45,4 +47,6 @@ I used CSS color-mix() for the first time which was not hard to figure out and s
 In CSS the native dialog element has a ::backdrop pseudo-element. I can't use that without regular CSS. But it's super easy to replicate with a giant box-shadow with no blur or offset (only spread, the 4th value). Assign a color with .5 alpha value and it's translucent. I used max(100vw, 100vh) to make the shadow take up the whole screen but I found out there is also 100vmax.
 
 Having the Enter key on a button open the native dialog element that uses a form with a submit button can be a pitfall because it can focus-trap the form and immediately submit it, which makes the form invisible (and appear to not work at all) if the form was valid with its prepopulated values. But e.preventDefault() fixes this.
+
+I had a bug for a while where I was mapping events to dates using ISO strings. This would map to GMT so it would go one day forward if scheduled later in the day.
 

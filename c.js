@@ -68,7 +68,7 @@ const CONTROLLER = (() => {
     const EVENTMAP = new Map();
     const EVENTSET = new Set();
     const mapEventToDay = (scheduledEvent, date) => {
-        const dayString = date.toISOString().slice(0, 10);
+        const dayString = date.toLocaleDateString();
         const eventsSet = EVENTMAP.get(dayString);
         if (eventsSet) {
             eventsSet.add(scheduledEvent);
@@ -89,7 +89,7 @@ const CONTROLLER = (() => {
     const removeEvent = (scheduledEvent) => {
         const dates = getDatesInRange(scheduledEvent);
         for (const date of dates) {
-            const dayString = date.toISOString().slice(0, 10);
+            const dayString = date.toLocaleDateString();
             const eventsSet = EVENTMAP.get(dayString);
             eventsSet?.delete(scheduledEvent);
         }
@@ -108,12 +108,11 @@ const CONTROLLER = (() => {
             return {
                 name: event.name,
                 description: event.description,
-                startTime: event.startTime.toISOString(),
-                endTime: event.endTime.toISOString(),
+                startTime: event.startTime.toLocaleString(),
+                endTime: event.endTime.toLocaleString(),
             };
         }));
-        const fileBlob = new Blob([eventsJson]);
-        const file = new File([fileBlob], 'events.json', { type: 'application/json' });
+        const file = new File([(new Blob([eventsJson]))], 'events.json', { type: 'application/json' });
         return file;
     };
     const importEvents = (scheduledEvents) => {
@@ -125,7 +124,7 @@ const CONTROLLER = (() => {
             addEvent(event);
         }
     };
-    const getEventsForDay = (day) => EVENTMAP.get(day.toISOString().slice(0, 10)) ?? new Set();
+    const getEventsForDay = (day) => EVENTMAP.get(day.toLocaleDateString()) ?? new Set();
     const getCurrentDate = () => new Date(_currentYear, _currentMonth - 1, _currentDay, 0);
     const setCurrentDate = (date) => {
         const year = date.getFullYear();
@@ -203,6 +202,8 @@ const THEMES = {
         const white = 'white';
         const alert = 'orange';
         const background = 'hsla(180, 100%, 25%, .1)';
+        const monthSelectHover = primaryColor;
+        const monthSelectBackground = secondaryColor;
         return {
             font,
             black,
@@ -220,9 +221,11 @@ const THEMES = {
             insetBoxShadow,
             dropShadow,
             background,
+            monthSelectHover,
+            monthSelectBackground,
         };
     })(),
-    '🌙': (() => {
+    '🧊': (() => {
         const font = 'normal 16px Georgia, Cambria, "Times New Roman", Times, serif';
         const black = 'hsl(220, 20%, 10%)';
         const white = 'aliceblue';
@@ -262,7 +265,7 @@ const THEMES = {
 const UI = {
     setTheme(theme = '🌿') {
         for (const [key, value] of Object.entries(THEMES[theme])) {
-            calendarContainer.style.setProperty(`--${key}`, value);
+            CALENDAR.style.setProperty(`--${key}`, value);
         }
     },
     getRandomColor() {
@@ -391,27 +394,45 @@ const UI = {
         dayButton.style.outline = 'var(--border)';
         return dayButton;
     },
-    MonthSelect() {
-        const select = document.createElement('select');
-        select.style.display = 'inline';
+    DaySelect() {
+        const select = UI.Select();
         select.style.appearance = 'none';
-        select.style.textAlign = 'center';
-        select.style.border = '0px';
-        select.style.borderRadius = '0px';
-        select.style.background = 'transparent';
-        select.style.cursor = 'pointer';
-        select.style.padding = '.1em';
-        select.style.font = 'inherit';
-        select.style.outline = '0px';
-        select.style.color = 'var(--black)';
-        select.style.transition = 'background-color .2s, box-shadow .2s';
+        select.style.height = '100%';
+        select.addEventListener('change', () => {
+            const currentDate = CONTROLLER.getCurrentDate();
+            setDayView(new Date(currentDate.getFullYear(), currentDate.getMonth(), Number(select.value)));
+        });
+        return select;
+    },
+    MonthSelect() {
+        const select = UI.Select();
+        select.style.appearance = 'none';
+        select.style.height = '100%';
         monthsOfTheYear.forEach((month, i) => {
             const isSelected = CONTROLLER.getCurrentDate().getMonth() === i;
-            select.add(new Option(month, String(i), false, isSelected));
+            const option = new Option(month, String(i), false, isSelected);
+            option.style.fontSize = '.8em';
+            select.add(option);
         });
         select.addEventListener('change', () => {
             const currentDate = CONTROLLER.getCurrentDate();
             setMonthView(currentDate.getFullYear(), Number(select.value) + 1);
+        });
+        return select;
+    },
+    YearSelect() {
+        const select = UI.Select();
+        select.style.appearance = 'none';
+        select.style.height = '100%';
+        for (let i = STARTYEAR; i <= ENDYEAR; i++) {
+            const isSelected = CONTROLLER.getCurrentDate().getFullYear() === i;
+            const option = new Option(String(i), String(i), false, isSelected);
+            option.style.fontSize = '.7em';
+            select.add(option);
+        }
+        select.addEventListener('change', () => {
+            const currentDate = CONTROLLER.getCurrentDate();
+            setMonthView(Number(select.value), currentDate.getMonth() + 1);
         });
         return select;
     },
@@ -434,6 +455,7 @@ const UI = {
             buttonDiv.style.gap = '1em';
             buttonDiv.style.justifyContent = 'end';
             const okButton = UI.Button();
+            okButton.style.padding = '.4em .8em';
             const cancelButton = UI.Button();
             okButton.textContent = 'OK';
             cancelButton.textContent = 'Cancel';
@@ -566,42 +588,36 @@ nextButton.style.width = '2em';
 prevButton.style.width = '2em';
 nextButton.textContent = '❯';
 prevButton.textContent = '❮';
-navigationButtonDiv.replaceChildren(prevButton, nextButton);
 nextButton.addEventListener('click', () => {
-    nextButton.style.filter = '';
     if (currentView === 'month') {
         const { year, month } = CONTROLLER.goToNextMonth();
-        mainMonthSelect.value = String(month - 1);
         setMonthView(year, month);
     }
     else {
         const date = CONTROLLER.goToNextDay();
         setDayView(date);
-        mainMonthSelect.value = String(date.getMonth());
     }
 });
 prevButton.addEventListener('click', () => {
-    prevButton.style.filter = '';
     if (currentView === 'month') {
         const { year, month } = CONTROLLER.goToPrevMonth();
-        mainMonthSelect.value = String(month - 1);
         setMonthView(year, month);
     }
     else {
         const date = CONTROLLER.goToPrevDay();
         setDayView(date);
-        mainMonthSelect.value = String(date.getMonth());
     }
 });
 const addEventButton = UI.Button();
-addEventButton.textContent = '📌';
+addEventButton.textContent = '📌 Schedule an event';
+addEventButton.style.paddingRight = '.8em';
 addEventButton.addEventListener('click', (e) => {
     e.preventDefault();
     eventDialog();
 });
 const eventDialog = async (scheduledEvent) => {
     const dialog = UI.Dialog(scheduledEvent?.color ?? 'var(--primaryColor)');
-    calendarContainer.append(dialog);
+    CALENDAR.append(dialog);
     const { form, getResult } = eventForm(scheduledEvent);
     dialog.replaceChildren(form);
     dialog.showModal();
@@ -629,26 +645,28 @@ const eventForm = (scheduledEvent) => {
     form.style.flexFlow = 'column';
     form.style.gap = '1em';
     const h1 = document.createElement('h1');
-    h1.textContent = '📌 Add event';
+    h1.textContent = '📌 Schedule an event';
     h1.style.margin = 'unset';
     h1.style.fontSize = '1.2em';
     h1.style.fontWeight = 'normal';
     const nameDiv = document.createElement('div');
     const nameLabel = UI.Label();
     const nameInput = UI.Textbox();
+    const nameId = `_${crypto.randomUUID()}`;
     nameDiv.style.display = 'grid';
-    nameLabel.htmlFor = 'name-input';
+    nameLabel.htmlFor = nameId;
     nameLabel.textContent = 'Name';
-    nameInput.id = 'name-input';
+    nameInput.id = nameId;
     nameInput.required = true;
     nameInput.pattern = '\\S.*';
     const descriptionDiv = document.createElement('div');
     const descriptionLabel = UI.Label();
     const descriptionInput = UI.Textarea();
+    const descId = `_${crypto.randomUUID()}`;
     descriptionDiv.style.display = 'grid';
-    descriptionLabel.htmlFor = 'description-input';
+    descriptionLabel.htmlFor = descId;
     descriptionLabel.textContent = 'Description';
-    descriptionInput.id = 'description-input';
+    descriptionInput.id = descId;
     const defaultStart = CONTROLLER.getCurrentDate();
     const defaultEnd = new Date(defaultStart.getTime() + 3600000);
     const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime, setCustomValidity } = UI.DatePicker('Start', scheduledEvent?.startTime ?? defaultStart);
@@ -667,6 +685,7 @@ const eventForm = (scheduledEvent) => {
         descriptionInput.value = scheduledEvent.description ?? '';
     }
     const okButton = UI.Button('submit');
+    okButton.style.padding = '.4em .8em';
     const cancelButton = UI.Button();
     okButton.textContent = 'OK';
     cancelButton.textContent = 'Cancel';
@@ -751,12 +770,6 @@ const handleDayKeydown = (e, i, day, dayButtons) => {
     }
 };
 const getDayView = (day) => {
-    const topDiv = document.createElement('div');
-    topDiv.style.fontSize = '1.5em';
-    topDiv.style.display = 'flex';
-    topDiv.style.justifyContent = 'space-between';
-    const dateHeader = document.createElement('div');
-    dateHeader.textContent = day.toISOString().split('T')[0];
     const dayGrid = document.createElement('div');
     dayGrid.style.display = 'grid';
     dayGrid.style.rowGap = '2em';
@@ -784,9 +797,12 @@ const getDayView = (day) => {
         eventButton.style.placeItems = 'center';
         eventButton.style.height = '3em';
         eventButton.style.cursor = 'pointer';
+        eventButton.style.overflow = 'hidden';
+        eventButton.style.maxWidth = '100%';
         eventButton.style.backgroundColor = event.color ?? UI.getRandomColor();
         eventButton.style.gridColumn = getGridColumnForEvent(day, event);
         eventButton.textContent = event.name;
+        eventButton.title = event.name;
         eventButton.addEventListener('pointerenter', () => eventButton.style.filter = 'brightness(1.2)');
         eventButton.addEventListener('pointerleave', () => eventButton.style.filter = '');
         eventButton.addEventListener('dblclick', () => eventDialog(event));
@@ -796,7 +812,7 @@ const getDayView = (day) => {
                 eventDialog(event);
             }
             else if (e.key === 'Backspace' || e.key === 'Delete') {
-                UI.Confirm(calendarContainer, `Delete this event: ${event.name}?`).then(bool => {
+                UI.Confirm(CALENDAR, `Delete this event: ${event.name}?`).then(bool => {
                     if (!bool)
                         return;
                     CONTROLLER.removeEvent(event);
@@ -808,8 +824,7 @@ const getDayView = (day) => {
         eventButton.addEventListener('focusout', handleDayFocusOut);
         dayGrid.append(eventButton);
     }
-    topDiv.append(goBackToMonthButton, dateHeader, navigationButtonDiv);
-    return { dayGrid, topDiv };
+    return { dayGrid };
 };
 const getTimeAs15MinuteIncrement = (d) => Math.floor(d.getHours() * 4) + Math.floor(d.getMinutes() / 15) + 1;
 const getGridColumnForEvent = (currentDay, event) => {
@@ -824,15 +839,6 @@ const getGridColumnForEvent = (currentDay, event) => {
     return `${getTimeAs15MinuteIncrement(event.startTime)} / ${getTimeAs15MinuteIncrement(event.endTime)}`;
 };
 const getMonthView = (month) => {
-    const y = month[0].getFullYear();
-    const m = month[0].getMonth();
-    const topDiv = document.createElement('div');
-    topDiv.style.fontSize = '1.5em';
-    topDiv.style.display = 'flex';
-    topDiv.style.justifyContent = 'space-between';
-    const dateHeader = document.createElement('div');
-    dateHeader.style.fontStyle = 'normal';
-    dateHeader.append(mainMonthSelect, String(y));
     const monthGrid = document.createElement('div');
     monthGrid.style.display = 'grid';
     monthGrid.style.gridTemplateColumns = 'repeat(7, 1fr)';
@@ -868,41 +874,47 @@ const getMonthView = (month) => {
             num.style.position = 'absolute';
             num.style.top = '.3em';
             num.style.right = '.3em';
-            num.style.width = '1em';
-            num.style.height = '1em';
             num.style.fontSize = '.8em';
             num.style.color = 'red';
-            num.style.outline = '1px solid red';
-            num.style.borderRadius = '50%';
-            num.textContent = String(eventsForThisDay.size);
+            num.textContent = `📌 ${eventsForThisDay.size}`;
             dayButton.append(num);
         }
         return dayButton;
     });
-    topDiv.append(prevButton, dateHeader, nextButton);
+    const isMax = month[0].getMonth() === 11 && month[0].getFullYear() >= ENDYEAR;
+    const isMin = month[0].getMonth() === 0 && month[0].getFullYear() <= STARTYEAR;
+    nextButton.style.visibility = isMax ? 'hidden' : '';
+    prevButton.style.visibility = isMin ? 'hidden' : '';
+    nextButton.disabled = isMax;
+    prevButton.disabled = isMin;
     monthGrid.append(...dayButtons);
     return {
-        topDiv,
         monthGrid,
         dayButtons
     };
 };
 const setMonthView = (year, month, focusIndex) => {
     currentView = 'month';
+    mainMonthSelect.value = String(month - 1);
+    mainYearSelect.value = String(year);
     CONTROLLER.setCurrentDate(new Date(year, month - 1, 1));
-    const { monthGrid, topDiv, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
-    header.replaceChildren(topDiv);
+    const { monthGrid, dayButtons } = getMonthView(CONTROLLER.getMonth(year, month));
     main.replaceChildren(monthGrid);
     if (typeof focusIndex === 'number') {
         dayButtons.at(focusIndex)?.focus();
     }
+    mainMonthSelect.blur();
+    mainYearSelect.blur();
+    headerMidDiv.replaceChildren(mainMonthSelect, mainYearSelect);
 };
-const setDayView = (day) => {
+const setDayView = (date) => {
     currentView = 'day';
-    CONTROLLER.setCurrentDate(day);
-    const { topDiv, dayGrid } = getDayView(day);
-    header.replaceChildren(topDiv);
+    CONTROLLER.setCurrentDate(date);
+    mainMonthSelect.value = String(date.getMonth());
+    const { dayGrid } = getDayView(date);
     main.replaceChildren(dayGrid);
+    mainMonthButton.textContent = monthsOfTheYear[date.getMonth()];
+    headerMidDiv.replaceChildren(mainMonthButton, String(date.getDate()));
 };
 const themeSelect = UI.Select();
 for (const key in THEMES) {
@@ -926,12 +938,10 @@ openButton.textContent = '📂';
 openButton.addEventListener('click', () => {
     fileInput.click();
 });
-const mainMonthSelect = UI.MonthSelect();
 const fileInput = document.createElement('input');
 fileInput.type = 'file';
 fileInput.accept = 'application/json';
 fileInput.addEventListener('change', async () => {
-    console.log(fileInput.files);
     const files = fileInput.files;
     if (!files || !files.length) {
         fileInput.value = '';
@@ -941,32 +951,61 @@ fileInput.addEventListener('change', async () => {
     const events = JSON.parse(json);
     if (Array.isArray(events) && events.length) {
         CONTROLLER.importEvents(events);
-    }
-    if (currentView = 'day') {
-    }
-    else {
+        const currentDate = CONTROLLER.getCurrentDate();
+        if (currentView = 'day') {
+            setDayView(currentDate);
+        }
+        else {
+            setMonthView(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
+        }
     }
 });
-const calendarContainer = document.createElement('div');
-calendarContainer.style.width = 'min(700px, 100vw)';
-calendarContainer.style.display = 'flex';
-calendarContainer.style.flexFlow = 'column';
-calendarContainer.style.gap = '2em';
-calendarContainer.style.padding = '3em';
-calendarContainer.style.boxShadow = 'var(--boxShadow)';
-calendarContainer.style.backgroundColor = 'var(--background)';
-calendarContainer.style.font = 'var(--font)';
+const CALENDAR = document.createElement('div');
+CALENDAR.style.width = 'min(700px, 100vw)';
+CALENDAR.style.display = 'grid';
+CALENDAR.style.gap = '2em';
+CALENDAR.style.padding = '3em';
+CALENDAR.style.boxShadow = 'var(--boxShadow)';
+CALENDAR.style.backgroundColor = 'var(--background)';
+CALENDAR.style.font = 'var(--font)';
 const header = document.createElement('header');
+header.style.fontSize = '1.5em';
+header.style.display = 'flex';
+header.style.justifyContent = 'space-between';
+header.style.height = '2em';
+const mainMonthSelect = UI.MonthSelect();
+const mainYearSelect = UI.YearSelect();
+const headerMidDiv = document.createElement('div');
+headerMidDiv.style.display = 'flex';
+headerMidDiv.style.alignItems = 'center';
+headerMidDiv.style.justifyContent = 'center';
+headerMidDiv.style.gap = '1em';
+const mainMonthButton = UI.Button();
+mainMonthButton.style.height = '100%';
+mainMonthButton.addEventListener('click', () => {
+    const currentDate = CONTROLLER.getCurrentDate();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const focusIndex = currentDate.getDate();
+    setMonthView(year, month, focusIndex);
+});
+const mainDaySelect = UI.Select();
+header.replaceChildren(prevButton, headerMidDiv, nextButton);
 const main = document.createElement('main');
 main.style.minHeight = '15em';
 const footer = document.createElement('footer');
 footer.style.display = 'flex';
-footer.style.justifyContent = 'space-evenly';
+footer.style.justifyContent = 'space-between';
 footer.style.height = 'max(3em, fit-content)';
 footer.style.fontSize = '1.2em';
-footer.append(addEventButton, saveButton, openButton, themeSelect);
-calendarContainer.replaceChildren(header, main, footer);
-calendarContainer.dataset.name = 'sw-calendar';
+footer.style.height = '2em';
+const footerMenu = document.createElement('div');
+footerMenu.style.display = 'flex';
+footerMenu.style.gap = '1em';
+footerMenu.replaceChildren(themeSelect, openButton, saveButton);
+footer.replaceChildren(addEventButton, footerMenu);
+CALENDAR.replaceChildren(header, main, footer);
+CALENDAR.dataset.name = 'sw-calendar';
 UI.setTheme();
 setMonthView(todayYear, todayMonth);
 const body = document.body;
@@ -974,4 +1013,4 @@ body.style.margin = '0px';
 body.style.height = '100vh';
 body.style.display = 'grid';
 body.style.placeItems = 'center';
-body.replaceChildren(calendarContainer);
+body.replaceChildren(CALENDAR);
