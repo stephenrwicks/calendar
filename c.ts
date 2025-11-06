@@ -909,7 +909,7 @@ const getDayView = (day: Date) => {
 
     const eventsForThisDay = CONTROLLER.getEventsForDay(day);
     if (!eventsForThisDay.size) {
-        dayGrid.append('No events');
+        // dayGrid.append('No events');
     }
 
     for (const time of ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM']) {
