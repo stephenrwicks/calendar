@@ -51,9 +51,8 @@ const CONTROLLER = (() => {
         const end = event.endTime;
         if (Number(end) < Number(start))
             throw new Error('End time is before start time?');
-        const dates = [end];
-        if (isSameDay(start, end))
-            return dates;
+        const endsAtMidnight = end.getHours() === 0 && end.getMinutes() === 0;
+        const dates = endsAtMidnight ? [] : [end];
         let d = new Date(end);
         while (true) {
             d.setDate(d.getDate() - 1);
@@ -115,13 +114,25 @@ const CONTROLLER = (() => {
         const file = new File([(new Blob([eventsJson]))], 'events.json', { type: 'application/json' });
         return file;
     };
-    const importEvents = (scheduledEvents) => {
-        EVENTSET.clear();
-        EVENTMAP.clear();
-        for (const event of scheduledEvents) {
-            event.startTime = new Date(event.startTime);
-            event.endTime = new Date(event.endTime);
-            addEvent(event);
+    const importEvents = async (fileList) => {
+        if (!fileList)
+            return;
+        if (!fileList.length)
+            return;
+        const json = await fileList[0].text();
+        try {
+            const events = JSON.parse(json);
+            if (!Array.isArray(events) || !events.length)
+                return;
+            EVENTSET.clear();
+            EVENTMAP.clear();
+            for (const event of events) {
+                event.startTime = new Date(event.startTime);
+                event.endTime = new Date(event.endTime);
+                addEvent(event);
+            }
+        }
+        catch {
         }
     };
     const getEventsForDay = (day) => EVENTMAP.get(day.toLocaleDateString()) ?? new Set();
@@ -312,6 +323,7 @@ const UI = {
         const label = document.createElement('label');
         label.style.display = 'block';
         label.style.width = 'fit-content';
+        label.style.marginBottom = '.2em';
         return label;
     },
     Textbox() {
@@ -411,7 +423,6 @@ const UI = {
         monthsOfTheYear.forEach((month, i) => {
             const isSelected = CONTROLLER.getCurrentDate().getMonth() === i;
             const option = new Option(month, String(i), false, isSelected);
-            option.style.fontSize = '.8em';
             select.add(option);
         });
         select.addEventListener('change', () => {
@@ -449,7 +460,10 @@ const UI = {
             div.style.display = 'grid';
             div.style.placeItems = 'center';
             div.style.flex = '1';
+            div.style.textAlign = 'center';
+            div.style.textWrap = 'balance';
             div.textContent = message;
+            div.style.lineHeight = '1.5em';
             const buttonDiv = document.createElement('div');
             buttonDiv.style.display = 'flex';
             buttonDiv.style.gap = '1em';
@@ -641,8 +655,7 @@ const eventDialog = async (scheduledEvent) => {
 const eventForm = (scheduledEvent) => {
     const { promise, resolve } = Promise.withResolvers();
     const form = document.createElement('form');
-    form.style.display = 'flex';
-    form.style.flexFlow = 'column';
+    form.style.display = 'grid';
     form.style.gap = '1em';
     const h1 = document.createElement('h1');
     h1.textContent = '📌 Schedule an event';
@@ -667,7 +680,8 @@ const eventForm = (scheduledEvent) => {
     descriptionLabel.htmlFor = descId;
     descriptionLabel.textContent = 'Description';
     descriptionInput.id = descId;
-    const defaultStart = CONTROLLER.getCurrentDate();
+    const currentTime = new Date();
+    const defaultStart = new Date(new Date(CONTROLLER.getCurrentDate().setHours(currentTime.getHours())).setMinutes(currentTime.getMinutes()));
     const defaultEnd = new Date(defaultStart.getTime() + 3600000);
     const { datePickerEl: startDateEl, getDate: getStartTime, setDate: setStartTime, setCustomValidity } = UI.DatePicker('Start', scheduledEvent?.startTime ?? defaultStart);
     const { datePickerEl: endDateEl, getDate: getEndTime, setDate: setEndTime } = UI.DatePicker('End', scheduledEvent?.endTime ?? defaultEnd);
@@ -691,7 +705,7 @@ const eventForm = (scheduledEvent) => {
     cancelButton.textContent = 'Cancel';
     const buttonDiv = document.createElement('div');
     buttonDiv.style.display = 'flex';
-    buttonDiv.style.justifyContent = 'end';
+    buttonDiv.style.justifySelf = 'end';
     buttonDiv.style.gap = '1em';
     buttonDiv.append(cancelButton, okButton);
     cancelButton.addEventListener('click', () => resolve(null));
@@ -775,19 +789,24 @@ const getDayView = (day) => {
     dayGrid.style.rowGap = '2em';
     dayGrid.style.gridTemplateColumns = 'repeat(96, 1fr)';
     dayGrid.style.minHeight = '12em';
-    dayGrid.style.padding = '.5em 0px';
     dayGrid.style.outline = 'var(--border)';
     let gridColumnStart = 1;
+    const eventsForThisDay = CONTROLLER.getEventsForDay(day);
+    if (!eventsForThisDay.size) {
+        dayGrid.append('No events');
+    }
     for (const time of ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM']) {
         const hourDiv = document.createElement('div');
         hourDiv.style.gridColumn = `${gridColumnStart} / span 16`;
+        hourDiv.style.alignSelf = 'start';
+        hourDiv.style.width = 'fit-content';
         gridColumnStart = gridColumnStart + 16;
         hourDiv.textContent = time;
         hourDiv.style.fontSize = '.8em';
         hourDiv.style.userSelect = 'none';
         dayGrid.append(hourDiv);
     }
-    for (const event of CONTROLLER.getEventsForDay(day)) {
+    for (const event of eventsForThisDay) {
         const eventButton = document.createElement('button');
         eventButton.type = 'button';
         eventButton.style.border = 'unset';
@@ -876,6 +895,8 @@ const getMonthView = (month) => {
             num.style.right = '.3em';
             num.style.fontSize = '.8em';
             num.style.color = 'red';
+            num.style.padding = '.1em .2em .1em .1em';
+            num.style.backgroundColor = 'var(--secondaryColor)';
             num.textContent = `📌 ${eventsForThisDay.size}`;
             dayButton.append(num);
         }
@@ -942,22 +963,17 @@ const fileInput = document.createElement('input');
 fileInput.type = 'file';
 fileInput.accept = 'application/json';
 fileInput.addEventListener('change', async () => {
-    const files = fileInput.files;
-    if (!files || !files.length) {
-        fileInput.value = '';
+    const x = await UI.Confirm(CALENDAR, 'This will overwrite existing events. Continue?');
+    if (!x)
         return;
+    await CONTROLLER.importEvents(fileInput.files);
+    fileInput.value = '';
+    const currentDate = CONTROLLER.getCurrentDate();
+    if (currentView = 'day') {
+        setDayView(currentDate);
     }
-    const json = await files[0].text();
-    const events = JSON.parse(json);
-    if (Array.isArray(events) && events.length) {
-        CONTROLLER.importEvents(events);
-        const currentDate = CONTROLLER.getCurrentDate();
-        if (currentView = 'day') {
-            setDayView(currentDate);
-        }
-        else {
-            setMonthView(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
-        }
+    else {
+        setMonthView(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
     }
 });
 const CALENDAR = document.createElement('div');
@@ -969,7 +985,7 @@ CALENDAR.style.boxShadow = 'var(--boxShadow)';
 CALENDAR.style.backgroundColor = 'var(--background)';
 CALENDAR.style.font = 'var(--font)';
 const header = document.createElement('header');
-header.style.fontSize = '1.5em';
+header.style.fontSize = '1.2em';
 header.style.display = 'flex';
 header.style.justifyContent = 'space-between';
 header.style.height = '2em';
