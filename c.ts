@@ -75,9 +75,10 @@ const CONTROLLER = (() => {
         const start = event.startTime;
         const end = event.endTime;
         if (Number(end) < Number(start)) throw new Error('End time is before start time?');
+        if (isSameDay(start, end)) return [start];
         const endsAtMidnight = end.getHours() === 0 && end.getMinutes() === 0;
-        // Don't include the end date if it ends at midnight
         const dates: Date[] = endsAtMidnight ? [] : [end];
+
         let d = new Date(end);
         // Just walk backward one day and push until you get the start day
         while (true) {
@@ -911,6 +912,7 @@ const getDayView = (day: Date) => {
     if (!eventsForThisDay.size) {
         // dayGrid.append('No events');
     }
+
 
     for (const time of ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM']) {
         const hourDiv = document.createElement('div');

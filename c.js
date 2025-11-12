@@ -51,6 +51,8 @@ const CONTROLLER = (() => {
         const end = event.endTime;
         if (Number(end) < Number(start))
             throw new Error('End time is before start time?');
+        if (isSameDay(start, end))
+            return [start];
         const endsAtMidnight = end.getHours() === 0 && end.getMinutes() === 0;
         const dates = endsAtMidnight ? [] : [end];
         let d = new Date(end);
